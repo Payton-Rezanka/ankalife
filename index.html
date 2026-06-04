@@ -409,9 +409,10 @@ function seedLeads(){
     const daysAgo = type==="aged" ? 30+Math.floor(Math.random()*150) : Math.floor(Math.random()*4);
     const L={ id:"L"+(1000+i), first:rnd(FIRST), last:rnd(LAST),
       state:rnd(STATES), city:"—", phone:"(555) "+(200+Math.floor(Math.random()*799))+"-"+(1000+Math.floor(Math.random()*8999)),
-      email:"lead"+i+"@example.com", a, score, type, daysAgo, status:"new" };
+      email:"lead"+i+"@example.com", a, score, type, daysAgo, status:"new", source:"Sample data" };
     L.price=priceLead(L);
     L.recs=recommend(a);
+    L.consent={given:true, at:new Date(Date.now()-daysAgo*86400000).toISOString(), method:"Web opt-in (sample data)", text:"Consent to be contacted about life insurance; opt out anytime."};
     out.push(L);
   }
   return out;
@@ -666,19 +667,39 @@ views.survey=()=>{
 function surveyResult(){
   const a=SV.a, sc=scoreLead(a), recs=recommend(a);
   return `<div class="container" style="max-width:640px">
-    <div class="form-card" style="text-align:center">
-      <div style="font-size:46px;color:var(--good)"><i class="ph-duotone ph-seal-check"></i></div>
-      <h1 style="font-size:24px;margin:6px 0">Thanks — you're matched!</h1>
-      <p style="color:var(--muted)">Based on your answers, here's what a licensed agent will see. A vetted agent will reach out ${a.contact==='callnow'?'shortly':'at your preferred time'}.</p>
-      <div style="display:inline-flex;gap:14px;align-items:center;margin:18px 0;padding:14px 22px;background:var(--sand);border-radius:14px">
-        <div class="score-badge tier${sc.tier}" style="min-width:78px"><div class="n">${sc.score}</div><small>Tier ${sc.tier}</small></div>
-        <div style="text-align:left"><b>Purchase-intent score</b><br><span style="color:var(--muted);font-size:13.5px">How ready you are to put coverage in place</span></div>
+    <div class="form-card">
+      <div style="text-align:center">
+        <div style="font-size:46px;color:var(--good)"><i class="ph-duotone ph-seal-check"></i></div>
+        <h1 style="font-size:24px;margin:6px 0">You're matched!</h1>
+        <p style="color:var(--muted)">Enter your details below and a licensed agent will reach out ${a.contact==='callnow'?'shortly':'at your preferred time'} with your real quote.</p>
+        <div style="display:inline-flex;gap:14px;align-items:center;margin:18px 0;padding:14px 22px;background:var(--sand);border-radius:14px">
+          <div class="score-badge tier${sc.tier}" style="min-width:78px"><div class="n">${sc.score}</div><small>Tier ${sc.tier}</small></div>
+          <div style="text-align:left"><b>Purchase-intent score</b><br><span style="color:var(--muted);font-size:13.5px">How ready you are to put coverage in place</span></div>
+        </div>
       </div>
-      <div style="text-align:left;margin-top:10px"><h3 style="font-size:17px;margin-bottom:8px">Recommended carriers for you</h3>
+      <div style="margin-top:6px"><h3 style="font-size:17px;margin-bottom:8px">Recommended carriers for you</h3>
         <div class="recs">${recs.map(r=>`<div class="rec"><h4>${r.name}</h4><div class="prod">${r.prod}</div><p>${r.why}</p></div>`).join("")}</div>
       </div>
-      <button class="btn btn-teal" style="margin-top:20px" onclick="submitSurvey()">Submit my info to an agent</button>
-      <p style="font-size:12px;color:var(--muted);margin-top:10px">By submitting you consent to be contacted by a licensed agent about life insurance. You can opt out anytime.</p>
+      <h3 style="font-size:17px;margin:20px 0 10px">Where should your agent reach you?</h3>
+      <div id="cErr"></div>
+      <div class="two">
+        <div class="field"><label>First name</label><input id="c_first" placeholder="First name"></div>
+        <div class="field"><label>Last name</label><input id="c_last" placeholder="Last name"></div>
+      </div>
+      <div class="two">
+        <div class="field"><label>Phone</label><input id="c_phone" type="tel" placeholder="(555) 123-4567"></div>
+        <div class="field"><label>Email</label><input id="c_email" type="email" placeholder="you@email.com"></div>
+      </div>
+      <div class="two">
+        <div class="field"><label>State</label><select id="c_state"><option value="">Select…</option>${STATES.map(s=>`<option>${s}</option>`).join("")}</select></div>
+        <div class="field"><label>ZIP code</label><input id="c_zip" inputmode="numeric" maxlength="5" placeholder="ZIP"></div>
+      </div>
+      <label style="display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:var(--muted);background:var(--cream);border:1px solid var(--line);border-radius:10px;padding:12px;margin:6px 0 14px">
+        <input type="checkbox" id="c_consent" style="margin-top:3px;flex-shrink:0">
+        <span>By checking this box and clicking submit, I give my prior <b>express written consent</b> to be contacted by AnkaLife and its licensed agents at the phone number and email above — including by autodialer, prerecorded/AI voice, SMS, and email — about life insurance, even if my number is on a Do-Not-Call list. Consent isn't a condition of purchase; I can opt out anytime by replying STOP. I agree to the Privacy Policy & Terms.</span>
+      </label>
+      <button class="btn btn-teal" style="width:100%" onclick="submitSurvey()"><i class="ph-bold ph-paper-plane-tilt"></i> Submit & get my quote</button>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:10px;text-align:center">🔒 Your information is sent only to a licensed, verified agent. We never sell it to unverified parties.</p>
     </div>
   </div>`;
 }
@@ -1367,14 +1388,27 @@ function pickSurvey(k,v){ SV.a[k]=v; render('survey'); setTimeout(()=>{ SV.step+
 function svNumNext(){ const n=val('sv_num'); if(!n){alert('Please enter your age.');return;} SV.a.age=+n; SV.step++; render('survey'); }
 function svBack(){ if(SV.step>0){SV.step--; render('survey');} }
 function submitSurvey(){
+  const first=val('c_first'), last=val('c_last'), phone=val('c_phone'), email=val('c_email'), state=val('c_state'), zip=val('c_zip');
+  const consent=document.getElementById('c_consent')?.checked;
+  const err=document.getElementById('cErr');
+  const digits=phone.replace(/\D/g,'');
+  if(!first||!last){ err.innerHTML=`<div class="alert bad">Please enter your first and last name.</div>`; return; }
+  if(digits.length<10){ err.innerHTML=`<div class="alert bad">Please enter a valid 10-digit phone number.</div>`; return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ err.innerHTML=`<div class="alert bad">Please enter a valid email address.</div>`; return; }
+  if(!state){ err.innerHTML=`<div class="alert bad">Please select your state.</div>`; return; }
+  if(!consent){ err.innerHTML=`<div class="alert bad">Please check the consent box — a licensed agent can only contact you with your permission.</div>`; return; }
   const a=SV.a, sc=scoreLead(a);
-  const L={ id:"L"+Date.now(), first:"New", last:"Prospect", state:STATES[Math.floor(Math.random()*50)],
-    phone:"(pending)", email:"pending", a, score:sc, type:sc.tier==="A"?"exclusive":"shared", daysAgo:0, status:"new", recs:recommend(a) };
+  const L={ id:"L"+Date.now(), first, last, state, zip,
+    phone, email, a, score:sc, type:sc.tier==="A"?"exclusive":"shared", daysAgo:0, status:"new", recs:recommend(a),
+    source:"Web opt-in survey",
+    consent:{ given:true, at:new Date().toISOString(),
+      method:"Web form — TCPA prior express written consent",
+      text:"Consent to be contacted by AnkaLife & its licensed agents (incl. autodialer, AI/prerecorded voice, SMS, email) about life insurance; opt out anytime via STOP." } };
   L.price=priceLead(L); LEADS.unshift(L); DB.set('leads',LEADS);
   SV={step:0,a:{}};
   document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
-    <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">You're all set!</h1>
-    <p style="color:var(--muted)">Your information has been sent to a licensed agent in your area. Expect a call from a friendly advisor soon. Stay safe out there.</p>
+    <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">You're all set, ${first}!</h1>
+    <p style="color:var(--muted)">Your information has been sent to a licensed, verified agent in ${state}. Expect a call at ${phone} soon. You can opt out anytime by replying STOP.</p>
     <button class="btn btn-teal" style="margin-top:16px" onclick="nav('home')">Back to home</button></div></div>`;
 }
 
@@ -1473,6 +1507,7 @@ function openLead(id,owned){
       <div style="margin-left:auto;text-align:right"><div class="lead-price" style="font-size:24px">$${l.price}</div></div>
     </div>
     ${contact}
+    ${l.consent?.given?`<div class="alert ok" style="display:flex;align-items:center;gap:8px;font-size:13px;padding:10px 12px"><i class="ph-bold ph-seal-check"></i> <span><b>TCPA consent on file</b> · ${l.source||'opt-in'} · ${new Date(l.consent.at).toLocaleDateString()}</span></div>`:`<div class="note">⚠️ No consent record on this lead — do not call until consent is verified.</div>`}
     <h3 style="margin:16px 0 8px;font-size:16px">Why this score</h3><div class="score-factors">${sf}</div>
     <h3 style="margin:18px 0 8px;font-size:16px">Recommended carriers (${l.recs.length})</h3>
     <div class="recs">${l.recs.map(r=>`<div class="rec"><h4>${r.name}</h4><div class="prod">${r.prod}</div><p>${r.why}</p></div>`).join("")}</div>
