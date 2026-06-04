@@ -717,6 +717,7 @@ function agentDashboard(){
   const u=SESSION, bought=ownedLeads();
   const spend=bought.reduce((s,l)=>s+(l.paid||0),0);
   const hot=bought.filter(l=>l.score.tier==="A"||l.score.tier==="B").length;
+  const matches=matchedLeads();
   return `<div class="page-head"><div><h1>Welcome, ${u.name.split(" ")[0]}</h1><p>Your lead pipeline at a glance.</p></div>
     <div style="display:flex;gap:10px;align-items:center">
       <div onclick="nav('wallet')" style="cursor:pointer;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 14px;text-align:right">
@@ -731,6 +732,17 @@ function agentDashboard(){
     <div class="stat"><div class="lab">Total invested</div><div class="val">$${spend}</div><div class="delta">avg $${bought.length?Math.round(spend/bought.length):0}/lead</div></div>
     <div class="stat"><div class="lab">Appointments</div><div class="val">${bought.filter(l=>l.status==='appt').length}</div><div class="delta up">set</div></div>
   </div>
+  <div class="card" style="margin-bottom:18px;border-left:3px solid var(--gold)">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div><h3 style="margin-bottom:4px"><i class="ph-duotone ph-sparkle" style="color:var(--gold)"></i> Auto-matched leads</h3>
+        <p style="color:var(--muted);font-size:13.5px">Fresh leads matching your licensed states, chosen tiers &amp; budget. <a onclick="editPrefs()">Edit preferences</a></p></div>
+      <div style="text-align:right"><div style="font-size:32px;font-weight:800;color:var(--teal);font-family:var(--font-display)">${matches.length}</div><div style="font-size:12px;color:var(--muted)">available now</div></div>
+    </div>
+    ${matches.length
+      ? `<div class="lead-grid" style="margin-top:14px">${matches.slice(0,3).map(l=>leadCard(l,false)).join("")}</div>
+         <button class="btn btn-teal btn-sm" style="margin-top:14px" onclick="MFILTER={tier:'',type:'',state:'',max:'',match:true};nav('marketplace')">View all ${matches.length} matches →</button>`
+      : `<p style="color:var(--muted);margin-top:12px">No matches right now. Widen your <a onclick="editPrefs()">preferences</a> or add more licensed states in <a onclick="nav('profile')">My Profile</a>.</p>`}
+  </div>
   <div class="card">
     <h3 style="margin-bottom:6px">Your carriers &amp; states</h3>
     <p style="color:var(--muted);font-size:13.5px;margin-bottom:10px">Leads are matched to what you can actually write. Keep this current in <a onclick="nav('profile')">My Profile</a>.</p>
@@ -742,7 +754,7 @@ function agentDashboard(){
 }
 
 /* ---------- Marketplace ---------- */
-let MFILTER={tier:"",type:"",state:"",max:""};
+let MFILTER={tier:"",type:"",state:"",max:"",match:false};
 function availableLeads(){
   const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
   return LEADS.filter(l=>{
@@ -751,8 +763,39 @@ function availableLeads(){
     return true;
   });
 }
+
+/* ---------- Buying preferences / auto-match ---------- */
+function getPrefs(){ return SESSION.prefs || {tiers:['A','B','C','D'],types:['exclusive','shared','livetransfer','aged'],maxPrice:null,statesOnly:true}; }
+function matchedLeads(){
+  const p=getPrefs(), states=SESSION.states||[];
+  return availableLeads().filter(l=>{
+    if(p.statesOnly && states.length && !states.includes(l.state)) return false;
+    if(p.tiers.length && !p.tiers.includes(l.score.tier)) return false;
+    if(p.types.length && !p.types.includes(l.type)) return false;
+    if(p.maxPrice && l.price>p.maxPrice) return false;
+    return true;
+  }).sort((a,b)=>b.score.score-a.score.score);
+}
+function editPrefs(){
+  const p=getPrefs();
+  modal("Lead preferences",`
+    <p style="color:var(--muted);margin-bottom:14px">New leads matching these are auto-surfaced on your dashboard. Matches are always limited to states you're licensed in (set those in <a onclick="closeModal();nav('profile')">My Profile</a>).</p>
+    <div class="field"><label>Intent tiers</label><div style="display:flex;gap:16px;flex-wrap:wrap">${['A','B','C','D'].map(t=>`<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" class="pr_tier" value="${t}" ${p.tiers.includes(t)?'checked':''}> Tier ${t}</label>`).join("")}</div></div>
+    <div class="field"><label>Lead types</label><div style="display:flex;gap:16px;flex-wrap:wrap">${[['exclusive','Exclusive'],['shared','Shared'],['livetransfer','Live transfer'],['aged','Aged']].map(t=>`<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" class="pr_type" value="${t[0]}" ${p.types.includes(t[0])?'checked':''}> ${t[1]}</label>`).join("")}</div></div>
+    <div class="field"><label>Max price per lead</label><input id="pr_max" type="number" value="${p.maxPrice||''}" placeholder="No limit"></div>
+    <button class="btn btn-teal" style="width:100%" onclick="savePrefs()">Save preferences</button>
+  `);
+}
+function savePrefs(){
+  SESSION.prefs={
+    tiers:[...document.querySelectorAll('.pr_tier:checked')].map(x=>x.value),
+    types:[...document.querySelectorAll('.pr_type:checked')].map(x=>x.value),
+    maxPrice:+document.getElementById('pr_max').value||null, statesOnly:true };
+  persistSession(); closeModal(); render(DB.get('route','dashboard'));
+}
 function marketplace(){
-  let list=availableLeads().filter(l=>{
+  const base = (MFILTER.match && SESSION.role!=="owner") ? matchedLeads() : availableLeads();
+  let list=base.filter(l=>{
     if(MFILTER.tier && l.score.tier!==MFILTER.tier) return false;
     if(MFILTER.type && l.type!==MFILTER.type) return false;
     if(MFILTER.state && l.state!==MFILTER.state) return false;
@@ -770,6 +813,7 @@ function marketplace(){
       <option value="aged" ${MFILTER.type==='aged'?'selected':''}>Aged</option></select>
     <select onchange="setFilter('state',this.value)"><option value="">All states</option>${STATES.map(s=>`<option ${MFILTER.state===s?'selected':''}>${s}</option>`).join("")}</select>
     <input type="number" placeholder="Max price $" value="${MFILTER.max}" oninput="setFilter('max',this.value)" style="width:130px">
+    ${owner?'':`<button class="btn ${MFILTER.match?'btn-teal':'btn-outline'} btn-sm" onclick="setFilter('match',${!MFILTER.match})" title="Show only leads matching your preferences"><i class="ph-duotone ph-sparkle"></i> My matches</button>`}
     <span style="color:var(--muted);font-size:13.5px;margin-left:auto">${list.length} leads</span>
   </div>
   ${list.length?`<div class="lead-grid">${list.map(l=>leadCard(l,false)).join("")}</div>`:`<div class="empty"><div class="ic"><i class="ph-duotone ph-magnifying-glass"></i></div><p>No leads match your filters.</p></div>`}`;
