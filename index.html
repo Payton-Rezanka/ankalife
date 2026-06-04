@@ -434,7 +434,8 @@ function topbar(app){
   const right = SESSION
     ? `<a class="navlink" onclick="nav('${SESSION.role==='owner'?'aicalls':'dashboard'}')">My Portal</a>
        <button class="btn btn-ghost btn-sm" onclick="logout()">Log out</button>`
-    : `<a class="navlink" onclick="nav('login')">Log in</a>
+    : `<a class="navlink" onclick="oneTap('owner')" style="color:var(--gold)"><i class="ph-bold ph-crown"></i> Owner Portal</a>
+       <a class="navlink" onclick="nav('login')">Log in</a>
        <button class="btn btn-primary btn-sm" onclick="startOnboard()">Agent Sign-up</button>`;
   return `<header class="nav"><div class="nav-inner">
     <div class="logo" onclick="nav('home')"><span class="mark">A</span> Anka<span style="color:var(--gold)">Life</span></div>
@@ -552,7 +553,12 @@ views.login=()=>`
     <button class="btn btn-outline" style="width:100%" onclick="sendMagicLink()"><i class="ph ph-envelope-simple"></i> Email me a magic link (no password)</button>
     <div id="magicMsg"></div>
     <p style="text-align:center;margin-top:16px;font-size:14px;color:var(--muted)">No account? <a onclick="nav('signup')">Sign up as an agent</a></p>
-    <div class="note info" style="margin-top:18px"><b>Demo logins</b><br>Owner (AI sales engine): <b>owner@ankalife.ai</b> / <b>owner123</b><br>Or create an agent account to see the marketplace.</div>
+    <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
+      <p style="font-size:11.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:800;margin-bottom:10px">One-tap demo access — no typing</p>
+      <button class="btn btn-primary" style="width:100%;margin-bottom:9px" onclick="oneTap('owner')"><i class="ph-bold ph-crown"></i> Enter Owner Portal — AI Sales Engine</button>
+      <button class="btn btn-outline" style="width:100%" onclick="oneTap('agent')"><i class="ph-bold ph-user"></i> Enter Demo Agent Portal</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center">Instantly explore both sides of the platform.</p>
+    </div>
   </div>
 </div>`;
 
@@ -1194,6 +1200,26 @@ function doLogin(){
   nav(acc.role==="owner"?"aicalls":"dashboard");
 }
 function logout(){ SESSION=null; DB.set('session',null); nav('home'); }
+
+/* ---------- One-tap demo access ---------- */
+function ensureDemoAgent(){
+  let a=accounts();
+  if(!a.find(x=>x.email==='agent@ankalife.ai')){
+    a.push({id:'demoagent',role:'agent',name:'Jordan Demo',agency:'Demo Insurance Group',
+      email:'agent@ankalife.ai',password:'demo123',npn:'12345678',licenseNumber:'TX-99887766',
+      licenseState:'TX',lineLife:true,states:['TX','FL','CA','GA','NY','AZ','NC','OH'],
+      carriers:CARRIERS.slice(0,6),status:'approved',balance:500,
+      transactions:[{id:'T0',type:'deposit',amt:500,desc:'Welcome demo credit',at:Date.now(),bal:500}],
+      purchased:[],prefs:{tiers:['A','B'],types:['exclusive','shared','livetransfer','aged'],maxPrice:null,statesOnly:true}});
+    saveAccounts(a);
+  }
+  return findAccount('agent@ankalife.ai');
+}
+function oneTap(role){
+  const acc = role==='owner' ? findAccount('owner@ankalife.ai') : ensureDemoAgent();
+  SESSION=acc; DB.set('session',acc);
+  nav(role==='owner'?'aicalls':'dashboard');
+}
 
 /* ---------- Magic-link (passwordless) login — simulated ----------
    In production: Supabase Auth / Resend emails a one-time signed link.
