@@ -766,6 +766,22 @@ function agentDashboard(){
     <div class="stat"><div class="lab">Total invested</div><div class="val">$${spend}</div><div class="delta">avg $${bought.length?Math.round(spend/bought.length):0}/lead</div></div>
     <div class="stat"><div class="lab">Appointments</div><div class="val">${bought.filter(l=>l.status==='appt').length}</div><div class="delta up">set</div></div>
   </div>
+  <div class="card" style="margin-bottom:18px;border-left:3px solid var(--good)">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div><h3 style="margin-bottom:4px"><i class="ph-duotone ph-gift" style="color:var(--good)"></i> Your free-lead link</h3>
+        <p style="color:var(--muted);font-size:13.5px">Share it anywhere — everyone who fills it out becomes your <b>exclusive, $0</b> consented lead. No vendors, no per-lead cost.</p></div>
+      <div style="text-align:right"><div style="font-size:32px;font-weight:800;color:var(--good);font-family:var(--font-display)">${referredLeads().length}</div><div style="font-size:12px;color:var(--muted)">free leads</div></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <input readonly value="${refLink(u)}" onclick="this.select()" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--cream);font-size:13px">
+      <button class="btn btn-teal btn-sm" id="refCopyBtn" onclick="copyRef()"><i class="ph-bold ph-copy"></i> Copy</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Get a free life insurance quote in 2 minutes: '+refLink(u))}"><i class="ph ph-whatsapp-logo"></i> WhatsApp</a>
+      <a class="btn btn-outline btn-sm" href="sms:?&body=${encodeURIComponent('Get a free life insurance quote: '+refLink(u))}"><i class="ph ph-chat-text"></i> Text</a>
+      <a class="btn btn-outline btn-sm" href="mailto:?subject=Free%20life%20insurance%20quote&body=${encodeURIComponent('Get a free quote in 2 minutes: '+refLink(u))}"><i class="ph ph-envelope"></i> Email</a>
+    </div>
+  </div>
   <div class="card" style="margin-bottom:18px;border-left:3px solid var(--gold)">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div><h3 style="margin-bottom:4px"><i class="ph-duotone ph-sparkle" style="color:var(--gold)"></i> Auto-matched leads</h3>
@@ -1404,11 +1420,13 @@ function submitSurvey(){
     consent:{ given:true, at:new Date().toISOString(),
       method:"Web form — TCPA prior express written consent",
       text:"Consent to be contacted by AnkaLife & its licensed agents (incl. autodialer, AI/prerecorded voice, SMS, email) about life insurance; opt out anytime via STOP." } };
-  L.price=priceLead(L); LEADS.unshift(L); DB.set('leads',LEADS);
+  L.price=priceLead(L);
+  const refAgent=attributeReferral(L);
+  LEADS.unshift(L); DB.set('leads',LEADS); DB.set('ref',null);
   SV={step:0,a:{}};
   document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
     <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">You're all set, ${first}!</h1>
-    <p style="color:var(--muted)">Your information has been sent to a licensed, verified agent in ${state}. Expect a call at ${phone} soon. You can opt out anytime by replying STOP.</p>
+    <p style="color:var(--muted)">Your information has been sent to ${refAgent?`<b>${refAgent.name}</b>, a`:'a'} licensed, verified agent in ${state}. Expect a call at ${phone} soon. You can opt out anytime by replying STOP.</p>
     <button class="btn btn-teal" style="margin-top:16px" onclick="nav('home')">Back to home</button></div></div>`;
 }
 
@@ -1455,6 +1473,29 @@ function confirmBuy(id){
 function persistSession(){
   const all=accounts(); const i=all.findIndex(a=>a.id===SESSION.id);
   if(i>=0){ all[i]=SESSION; saveAccounts(all); } DB.set('session',SESSION);
+}
+
+/* ============================================================
+   REFERRAL FUNNEL — free, exclusive, owned leads (no vendors)
+   ============================================================ */
+function refCodeFor(acc){ return (acc.name||'agent').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g,'')+'-'+String(acc.id).slice(-4); }
+function refLink(acc){ return location.origin+location.pathname.replace(/index\.html$/,'')+'?ref='+refCodeFor(acc); }
+function findByRef(code){ return accounts().find(a=>refCodeFor(a)===code); }
+function copyRef(){
+  const link=refLink(SESSION);
+  navigator.clipboard?.writeText(link).then(()=>{ const b=document.getElementById('refCopyBtn'); if(b){b.innerHTML='<i class="ph-bold ph-check"></i> Copied!'; setTimeout(()=>b.innerHTML='<i class="ph-bold ph-copy"></i> Copy',1800);} });
+}
+function referredLeads(){ return (SESSION.purchased||[]).filter(p=>p.source==='referral'); }
+function attributeReferral(L){
+  const ref=DB.get('ref',null); if(!ref) return false;
+  const ag=findByRef(ref); if(!ag) return false;
+  L.referredBy=ag.id; L.exclusiveSoldTo=ag.id; L.type='exclusive'; L.price=0; L.source='Agent referral';
+  const all=accounts(); const i=all.findIndex(a=>a.id===ag.id);
+  if(i>=0){ all[i].purchased=all[i].purchased||[];
+    all[i].purchased.push({id:L.id,paid:0,status:'new',snapshot:L,boughtAt:Date.now(),source:'referral'});
+    saveAccounts(all);
+    if(SESSION && SESSION.id===ag.id){ SESSION=all[i]; DB.set('session',SESSION); } }
+  return ag;
 }
 
 /* ============================================================
@@ -1593,6 +1634,10 @@ function closeModal(){ document.getElementById('modal-root').innerHTML=""; }
 function val(id){const e=document.getElementById(id);return e?e.value.trim():""}
 
 /* ---------- boot ---------- */
+(function captureRef(){
+  const code=new URLSearchParams(location.search).get('ref');
+  if(code){ DB.set('ref',code); DB.set('route','survey'); }
+})();
 render(DB.get('route','home'));
 </script>
 </body>
