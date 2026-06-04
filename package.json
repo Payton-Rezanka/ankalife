@@ -1,0 +1,19 @@
+{
+  "name": "aegis-life",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered life-insurance lead platform: scored lead marketplace + autonomous (compliant) AI sales engine.",
+  "scripts": {
+    "dev": "npx --yes serve . -l 5173",
+    "start": "npx --yes serve . -l 5173"
+  },
+  "keywords": [
+    "life-insurance",
+    "leads",
+    "insurtech",
+    "ai-voice",
+    "marketplace"
+  ],
+  "license": "UNLICENSED",
+  "author": ""
+}
