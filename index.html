@@ -2,8 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>AnkaLife — AI Life Insurance Lead Platform</title>
+<!-- PWA: installable app on iOS + Android -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#082a2b">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AnkaLife">
 <!-- Distinctive typography + premium icon set (frontend-design principles, not generic AI defaults) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1842,6 +1851,31 @@ function val(id){const e=document.getElementById(id);return e?e.value.trim():""}
   if(p.get('goto')==='survey'){ DB.set('route','survey'); SV={step:0,a:{}}; }
 })();
 render(DB.get('route','home'));
+
+/* ---------- PWA: service worker + install ---------- */
+if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+let _deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); _deferredPrompt=e; showInstallBtn(); });
+function showInstallBtn(){
+  if(document.getElementById('pwaInstall')) return;
+  const b=document.createElement('button'); b.id='pwaInstall';
+  b.innerHTML='<i class="ph-bold ph-device-mobile"></i> Install app';
+  b.style.cssText='position:fixed;bottom:18px;right:18px;z-index:300;background:linear-gradient(135deg,#e0a23c,#c8862a);color:#082a2b;font-weight:800;border:none;border-radius:30px;padding:12px 18px;box-shadow:0 10px 26px rgba(0,0,0,.28);cursor:pointer;font-family:inherit;font-size:14px;display:flex;align-items:center;gap:8px';
+  b.onclick=async()=>{ if(_deferredPrompt){ _deferredPrompt.prompt(); await _deferredPrompt.userChoice; _deferredPrompt=null; b.remove(); } };
+  document.body.appendChild(b);
+}
+window.addEventListener('appinstalled',()=>{ const b=document.getElementById('pwaInstall'); if(b)b.remove(); });
+(function iosInstallHint(){
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone=window.navigator.standalone||matchMedia('(display-mode: standalone)').matches;
+  if(isIOS && !standalone && !DB.get('iosHintDismissed',false)){
+    const d=document.createElement('div'); d.id='iosHint';
+    d.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:300;background:#082a2b;color:#fff;padding:14px 16px;font-size:13.5px;display:flex;gap:12px;align-items:center;box-shadow:0 -6px 20px rgba(0,0,0,.25)';
+    d.innerHTML='<i class="ph-bold ph-export" style="font-size:22px;color:var(--gold)"></i><span style="flex:1;line-height:1.4">Install <b>AnkaLife</b> on your iPhone: tap <b>Share</b>, then <b>Add to Home Screen</b>.</span><button style="background:var(--gold);border:none;border-radius:8px;padding:7px 13px;font-weight:800;font-family:inherit">Got it</button>';
+    d.querySelector('button').onclick=()=>{ DB.set('iosHintDismissed',true); d.remove(); };
+    document.body.appendChild(d);
+  }
+})();
 </script>
 </body>
 </html>
