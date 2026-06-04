@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Aegis Life — AI Life Insurance Lead Platform</title>
+<title>AnkaLife — AI Life Insurance Lead Platform</title>
 <!-- Distinctive typography + premium icon set (frontend-design principles, not generic AI defaults) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -249,7 +249,7 @@ footer.ft a{color:#cfe0e6}
 
 <script>
 /* ============================================================
-   AEGIS LIFE — AI Life Insurance Lead Platform (demo build)
+   ANKALIFE — AI Life Insurance Lead Platform (demo build)
    Single-file front-end. Data persists in localStorage.
    Pricing benchmarks from real lead vendors (2025):
    shared $20-40 | exclusive $75-150 | live-transfer $80-200 | aged $5-15
@@ -257,8 +257,8 @@ footer.ft a{color:#cfe0e6}
 
 /* ---------- Persistence ---------- */
 const DB = {
-  get(k,f){ try{return JSON.parse(localStorage.getItem('aegis_'+k))??f}catch(e){return f} },
-  set(k,v){ localStorage.setItem('aegis_'+k, JSON.stringify(v)) }
+  get(k,f){ try{return JSON.parse(localStorage.getItem('anka_'+k))??f}catch(e){return f} },
+  set(k,v){ localStorage.setItem('anka_'+k, JSON.stringify(v)) }
 };
 let SESSION = DB.get('session', null);
 
@@ -391,7 +391,7 @@ function findAccount(email){return accounts().find(x=>x.email.toLowerCase()===em
 (function ensureOwner(){
   let a=accounts();
   if(!a.find(x=>x.role==="owner")){
-    a.push({id:"owner",role:"owner",name:"Platform Owner",email:"owner@aegislife.ai",password:"owner123",
+    a.push({id:"owner",role:"owner",name:"Platform Owner",email:"owner@ankalife.ai",password:"owner123",
       status:"approved",npn:"—",carriers:CARRIERS.slice(0,6),states:["TX","FL","CA","NY"],purchased:[],balance:0,transactions:[]});
     saveAccounts(a);
   }
@@ -437,7 +437,7 @@ function topbar(app){
     : `<a class="navlink" onclick="nav('login')">Log in</a>
        <button class="btn btn-primary btn-sm" onclick="startOnboard()">Agent Sign-up</button>`;
   return `<header class="nav"><div class="nav-inner">
-    <div class="logo" onclick="nav('home')"><span class="mark">A</span> Aegis<span style="color:var(--gold)">Life</span></div>
+    <div class="logo" onclick="nav('home')"><span class="mark">A</span> Anka<span style="color:var(--gold)">Life</span></div>
     <div class="spacer"></div>
     <a class="navlink" onclick="nav('home')">Home</a>
     <a class="navlink" onclick="nav('home');setTimeout(()=>scrollToId('how'),60)">How it works</a>
@@ -458,7 +458,7 @@ views.home=()=>`
 <section class="hero"><div class="hero-inner">
   <div>
     <h1>Life insurance leads that <span class="hl">call themselves.</span></h1>
-    <p class="sub">Aegis Life pairs a marketplace of scored, consent-verified life-insurance leads with an AI voice agent that calls, qualifies, handles objections, and books appointments — so policies get written while you sleep.</p>
+    <p class="sub">AnkaLife pairs a marketplace of scored, consent-verified life-insurance leads with an AI voice agent that calls, qualifies, handles objections, and books appointments — so policies get written while you sleep.</p>
     <div class="cta-row">
       <button class="btn btn-primary" onclick="startOnboard()">Join as an Agent →</button>
       <button class="btn btn-ghost" onclick="nav('survey')">I'm shopping for coverage</button>
@@ -533,7 +533,7 @@ ${footer()}`;
 function startOnboard(){ OB={step:0,a:{states:[],carriers:[]}}; nav('onboard'); }
 
 function footer(){return `<footer class="ft"><div style="max-width:1000px;margin:0 auto">
-  <div class="logo" style="justify-content:center;color:#fff;margin-bottom:10px"><span class="mark">A</span> AegisLife</div>
+  <div class="logo" style="justify-content:center;color:#fff;margin-bottom:10px"><span class="mark">A</span> AnkaLife</div>
   <p>AI life-insurance lead platform · marketplace + autonomous AI sales engine.</p>
   <p style="margin-top:10px;font-size:12px;color:#7e98a0">Demo build for evaluation. Compliance note: live AI calling requires TCPA-compliant prior express written consent, internal &amp; national DNC scrubbing, and state insurance licensure. See the included Compliance &amp; Startup packet.</p>
 </div></footer>`}
@@ -543,7 +543,7 @@ views.login=()=>`
 <div class="container" style="max-width:460px">
   <div class="form-card">
     <h1 style="font-size:24px;margin-bottom:4px">Welcome back</h1>
-    <p style="color:var(--muted);margin-bottom:20px">Log in to your Aegis Life portal.</p>
+    <p style="color:var(--muted);margin-bottom:20px">Log in to your AnkaLife portal.</p>
     <div id="loginErr"></div>
     <div class="field"><label>Email</label><input id="li_email" type="email" placeholder="you@agency.com"></div>
     <div class="field"><label>Password</label><input id="li_pass" type="password" placeholder="••••••••"></div>
@@ -552,7 +552,7 @@ views.login=()=>`
     <button class="btn btn-outline" style="width:100%" onclick="sendMagicLink()"><i class="ph ph-envelope-simple"></i> Email me a magic link (no password)</button>
     <div id="magicMsg"></div>
     <p style="text-align:center;margin-top:16px;font-size:14px;color:var(--muted)">No account? <a onclick="nav('signup')">Sign up as an agent</a></p>
-    <div class="note info" style="margin-top:18px"><b>Demo logins</b><br>Owner (AI sales engine): <b>owner@aegislife.ai</b> / <b>owner123</b><br>Or create an agent account to see the marketplace.</div>
+    <div class="note info" style="margin-top:18px"><b>Demo logins</b><br>Owner (AI sales engine): <b>owner@ankalife.ai</b> / <b>owner123</b><br>Or create an agent account to see the marketplace.</div>
   </div>
 </div>`;
 
@@ -584,7 +584,7 @@ views.signup=()=>`
     <div class="field"><label>Carrier appointments</label><div class="hint" style="margin-bottom:6px">Which carriers are you appointed to write with?</div>
       <div class="checks" id="su_carr">${CARRIERS.map(c=>`<label><input type="checkbox" value="${c}" class="su_ca"> ${c}</label>`).join("")}</div>
     </div>
-    <label style="display:flex;gap:10px;align-items:flex-start;font-size:13.5px;margin:6px 0 16px"><input type="checkbox" id="su_attest" style="margin-top:3px"> <span>I certify that I hold an active resident insurance producer license, that the information above is accurate and current, and I authorize Aegis Life to verify it against the NIPR Producer Database.</span></label>
+    <label style="display:flex;gap:10px;align-items:flex-start;font-size:13.5px;margin:6px 0 16px"><input type="checkbox" id="su_attest" style="margin-top:3px"> <span>I certify that I hold an active resident insurance producer license, that the information above is accurate and current, and I authorize AnkaLife to verify it against the NIPR Producer Database.</span></label>
     <button class="btn btn-teal" style="width:100%" onclick="doSignup()">Verify &amp; create account</button>
     <p style="text-align:center;margin-top:14px;font-size:14px;color:var(--muted)">Already verified? <a onclick="nav('login')">Log in</a></p>
   </div>
@@ -709,7 +709,7 @@ function deniedPanel(){
   return `<div class="page-head"><div><h1>Account not approved</h1><p>Your automated license verification did not pass.</p></div></div>
   <div class="alert bad"><b>Verification result: Denied</b><br>Checked against ${u.verify?.source||"NIPR Producer Database"}.</div>
   <div class="card"><h3 style="margin-bottom:10px">Reasons</h3><ol style="padding-left:20px;color:var(--muted);line-height:1.8">${r.map(x=>`<li>${x}</li>`).join("")}</ol>
-  <p style="margin-top:14px">Fix the items above in <a onclick="nav('profile')">My Profile</a> and re-run verification, or contact licensing@aegislife.ai.</p></div>`;
+  <p style="margin-top:14px">Fix the items above in <a onclick="nav('profile')">My Profile</a> and re-run verification, or contact licensing@ankalife.ai.</p></div>`;
 }
 
 /* ---------- Agent dashboard ---------- */
@@ -824,7 +824,7 @@ function exportLeadsCSV(){
   const rows=b.map(l=>[l.first,l.last,l.state,l.a.age,l.phone,l.email,l.score.tier,l.score.score,l.type,covLabel(l.a.coverage),trigLabel(l.a.trigger),l.a.budget,l.a.health,l.a.tobacco,statusLabel(l.status),l.recs[0].name,l.paid].map(esc).join(","));
   const csv=[cols.join(","),...rows].join("\n");
   const blob=new Blob([csv],{type:"text/csv"}); const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download="aegis-leads.csv"; a.click(); URL.revokeObjectURL(url);
+  const a=document.createElement('a'); a.href=url; a.download="anka-leads.csv"; a.click(); URL.revokeObjectURL(url);
 }
 
 /* ---------- Wallet page ---------- */
@@ -1017,7 +1017,7 @@ function buildScript(l){
   const secondKey = familyTrig?"spouse":(l.a.existing!=="none"?"have":"young");
   const O=OBJECTIONS, sec=O[secondKey];
   return [
-    ["ai",`Hi, is this ${nm}? Hi ${nm}, this is Avery calling on the recorded line from Aegis Life — you recently asked about life insurance to protect your ${trig==="general"?"family":trig}. Is now an okay time for just a couple of minutes?`],
+    ["ai",`Hi, is this ${nm}? Hi ${nm}, this is Avery calling on the recorded line from AnkaLife — you recently asked about life insurance to protect your ${trig==="general"?"family":trig}. Is now an okay time for just a couple of minutes?`],
     ["client",`Uh… sure, but I'm kind of busy. What's this about exactly?`],
     ["sys",`Objection detected: BUSY → rebuttal engaged`],
     ["ai",O.busy.rebut[0](l)],
@@ -1188,7 +1188,7 @@ views.onboard=()=>{
   const head=`<div class="form-card"><div class="progress">${OB_STEPS.map((_,i)=>`<span class="seg ${i<=s?'on':''}"></span>`).join("")}</div>
     <div class="qh" style="color:var(--muted);font-size:13px;margin-bottom:4px">Step ${s+1} of ${OB_STEPS.length} · ${OB_STEPS[s]}</div>`;
   let body="";
-  if(s===0) body=`<h1 style="font-size:23px;margin-bottom:4px">Welcome to Aegis Life</h1>
+  if(s===0) body=`<h1 style="font-size:23px;margin-bottom:4px">Welcome to AnkaLife</h1>
     <p style="color:var(--muted);margin-bottom:16px">Let's get you verified and buying leads in about 3 minutes. No manual approval — it's all automatic.</p>
     <div class="two"><div class="field"><label>Full name</label><input id="ob_name" value="${a.name||''}" placeholder="Jane Agent"></div>
       <div class="field"><label>Agency (optional)</label><input id="ob_agency" value="${a.agency||''}" placeholder="Agency name"></div></div>

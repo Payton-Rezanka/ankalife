@@ -1,4 +1,4 @@
-# Aegis Life — Founder's Packet
+# AnkaLife — Founder's Packet
 ### How to turn this prototype into a real, legal, profitable life-insurance lead company
 *Prepared June 4, 2026. This is plain-English coaching, not legal advice — confirm specifics with an attorney and your state insurance department before you take money.*
 
@@ -48,7 +48,7 @@ Run the AI sales engine on your own leads (Model B economics) **and** sell the o
 
 Do these in order. None require a lawyer, though a 1-hour consult is money well spent.
 
-1. **Choose a name + check it's free.** Search your Secretary of State business database + the USPTO trademark search (tmsearch.uspto.gov) + domain availability (next section). "Aegis Life" is a placeholder — confirm it's not taken in insurance.
+1. **Choose a name + check it's free.** Search your Secretary of State business database + the USPTO trademark search (tmsearch.uspto.gov) + domain availability (next section). confirm "AnkaLife" isn't already trademarked in insurance before you commit to it.
 2. **Form an LLC** (start here; convert to C-corp later only if you raise venture money).
    - File "Articles of Organization" with your **state's Secretary of State** ($50–500 depending on state).
    - Easiest: do it directly on the SoS website. Services like Northwest Registered Agent or LegalZoom cost more but handle it for you.
@@ -84,16 +84,16 @@ This is the "show me how to get the domain and link" part. Step by step:
 
 ### 4a. Buy the domain
 1. Go to a registrar: **Cloudflare Registrar** (cheapest, at-cost), **Namecheap**, or **Porkbun**. Avoid GoDaddy upsells.
-2. Search your name, e.g. `aegislife.com`. If `.com` is taken, consider `getaegis.com`, `aegislife.ai`, `aegislifeleads.com`. **`.com` is worth paying for** — it's what people trust and type.
+2. Search your name, e.g. `ankalife.com`. If `.com` is taken, consider `getanka.com`, `ankalife.ai`, `ankalifeleads.com`. **`.com` is worth paying for** — it's what people trust and type.
 3. Buy it (~$10–15/yr for .com, ~$60/yr for .ai). Enable **auto-renew** and **WHOIS privacy** (free at Cloudflare/Namecheap).
 
 ### 4b. Put the current prototype online (free, today)
 The prototype is a single `index.html` — you can host it for **free** in minutes:
 - **Easiest:** drag the folder onto **Netlify Drop** (app.netlify.com/drop) or deploy with **Cloudflare Pages** / **GitHub Pages** / **Vercel**. You'll get a live URL instantly.
-- **Connect your domain:** in the host's dashboard, "Add custom domain" → it gives you DNS records → paste them at your registrar (or, if you used Cloudflare for both, it's automatic). Done — `https://aegislife.com` is live with free SSL.
+- **Connect your domain:** in the host's dashboard, "Add custom domain" → it gives you DNS records → paste them at your registrar (or, if you used Cloudflare for both, it's automatic). Done — `https://ankalife.com` is live with free SSL.
 
 ### 4c. Get a business email
-- **Google Workspace** ($6/user/mo) or **Zoho Mail** (free tier) gives you `you@aegislife.com`. Looks professional and you need it for carrier/IMO applications and the magic-link login feature.
+- **Google Workspace** ($6/user/mo) or **Zoho Mail** (free tier) gives you `you@ankalife.com`. Looks professional and you need it for carrier/IMO applications and the magic-link login feature.
 
 ---
 

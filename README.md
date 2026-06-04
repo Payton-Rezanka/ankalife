@@ -1,6 +1,6 @@
 <div align="center">
 
-# ◆ Aegis Life
+# ◆ AnkaLife
 
 ### AI-powered life-insurance lead platform
 *A scored lead marketplace + a compliant, autonomous AI sales engine — in one place.*
@@ -13,7 +13,7 @@
 
 ## What this is
 
-Aegis Life is two products in one platform:
+AnkaLife is two products in one platform:
 
 1. **Lead Marketplace** — consumers complete a short survey; the platform computes a
    **0–100 purchase-intent score (A–D tier)**, recommends **1–3 best-fit carriers**, prices
@@ -37,7 +37,7 @@ npm run dev          # serves on http://localhost:5173
 ```
 
 **Demo logins**
-- **Owner / AI Sales Engine:** `owner@aegislife.ai` · `owner123`
+- **Owner / AI Sales Engine:** `owner@ankalife.ai` · `owner123`
 - **Agent:** create one via *Agent Sign-up* (try a bad NPN like `12` to see an automated denial)
 
 ## Features
@@ -66,7 +66,7 @@ npm run dev          # serves on http://localhost:5173
 ## Project structure
 
 ```
-aegis-life/
+ankalife/
 ├── index.html                      # the entire working prototype
 ├── README.md
 ├── LICENSE                         # proprietary — all rights reserved
@@ -75,7 +75,7 @@ aegis-life/
 │   ├── FOUNDER_PACKET.md           # how to start the company (LLC, licensing, domain, $$)
 │   └── BUILD_NOTES.md              # prototype → production (schema, AI-caller wiring)
 ├── AI_Calling_Playbook.docx        # printable call scripts & objection playbook
-└── Aegis_Life_Startup_Packet.docx  # printable startup packet
+└── AnkaLife_Startup_Packet.docx    # printable startup packet
 ```
 
 ## Roadmap
@@ -105,4 +105,4 @@ state Department of Insurance before going live. Full detail in
 
 ---
 
-<div align="center"><sub>© 2026 Aegis Life · All rights reserved · Built as a real product, the right way.</sub></div>
+<div align="center"><sub>© 2026 AnkaLife · All rights reserved · Built as a real product, the right way.</sub></div>

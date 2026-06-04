@@ -1,4 +1,4 @@
-# Aegis Life — Build Notes (prototype → production)
+# AnkaLife — Build Notes (prototype → production)
 
 This is the engineering companion to `FOUNDER_PACKET.md`. It turns the single-file
 `index.html` prototype into a real product. Hand this to a developer, or come back and
@@ -94,7 +94,7 @@ Supabase Auth does this natively:
 import { createClient } from '@supabase/supabase-js'
 const supabase = createClient(URL, ANON_KEY)
 // sends the real email with a one-time signed link:
-await supabase.auth.signInWithOtp({ email, options:{ emailRedirectTo:'https://aegislife.com/onboard' }})
+await supabase.auth.signInWithOtp({ email, options:{ emailRedirectTo:'https://ankalife.com/onboard' }})
 ```
 New users land on `/onboard` → run the same wizard → write to `profiles`.
 
@@ -149,7 +149,7 @@ handling are live. See Compliance below — this is the part with $500–$1,500/
 
 ### Claude system prompt (drop-in starting point)
 ```
-You are "Avery," a warm, calm, trustworthy life-insurance phone concierge for Aegis Life.
+You are "Avery," a warm, calm, trustworthy life-insurance phone concierge for AnkaLife.
 You are an AI on a RECORDED line; disclose this in your first 1–2 sentences.
 Goal: confirm interest, qualify, handle objections, and BOOK AN APPOINTMENT with a
 licensed human agent. You NEVER quote a binding price, never collect payment, and never
