@@ -480,7 +480,6 @@ function topbar(app){
     <a class="navlink" onclick="nav('home');setTimeout(()=>scrollToId('how'),60)">How it works</a>
     <a class="navlink" onclick="nav('home');setTimeout(()=>scrollToId('pricing'),60)">Pricing</a>
     <a class="navlink" onclick="nav('survey')">Get a Quote</a>
-    <a class="navlink" onclick="nav('resources')">Founder Hub</a>
     ${right}
   </div></header>`;
 }
@@ -632,34 +631,6 @@ views.signup=()=>`
   </div>
 </div>`;
 
-/* ---------- Resources / Founder hub ---------- */
-const LAUNCH_CHECKLIST=[
-  ["Form the company","LLC + EIN (free at irs.gov) + business bank account + E&O insurance","~1 week","$200–800"],
-  ["Get the domain & go live","Buy at Cloudflare/Namecheap, deploy this file free on Netlify/Vercel, add business email","~1 hour","$15–60/yr"],
-  ["Stand up real accounts & payments","Supabase (auth + DB) + Stripe (agents pay for leads) + magic-link email","Days 1–30","$0–25/mo"],
-  ["Real license verification","Apply for NIPR PDB API access; replace the simulated check","Days 31–60","usage"],
-  ["Compliant lead intake","Capture proof of consent (TrustedForm/Jornaya) on every lead form","Days 31–60","usage"],
-  ["Turn on the AI caller","Twilio + Vapi/Retell + ElevenLabs voice + Claude-driven script, DNC scrubbing, opt-out handling","Days 61–90","~$0.05–0.15/min"],
-  ["Get licensed (for Model B)","Pre-licensing course → state exam → NIPR application → carrier/IMO appointments","2–6 weeks","$300–700"],
-  ["Lawyer check","One hour with a TCPA/insurance-marketing attorney before any real calls","Before launch","$500–1,500"]
-];
-views.resources=()=>`
-<div class="container" style="max-width:900px">
-  <div class="page-head"><div><h1>Founder Resources</h1><p>Your playbook for turning this platform into a real, legal company.</p></div>
-    <button class="btn btn-outline btn-sm" onclick="history.length>1?history.back():nav('home')">← Back</button></div>
-  <div class="card" style="margin-bottom:18px">
-    <h3 style="margin-bottom:6px"><i class="ph-duotone ph-book-open" style="color:var(--teal)"></i> Full Founder's Packet</h3>
-    <p style="color:var(--muted);font-size:14px">The complete coaching manual — business models, LLC/EIN/bank setup, getting licensed, buying a domain, the prototype→production stack, a compliance checklist, unit economics, and a 30/60/90-day plan — lives in <b>FOUNDER_PACKET.md</b> next to this file. The build/wiring details are in <b>BUILD_NOTES.md</b>.</p>
-  </div>
-  <h3 style="margin:6px 0 12px"><i class="ph-duotone ph-rocket-launch" style="color:var(--teal)"></i> Launch checklist</h3>
-  ${LAUNCH_CHECKLIST.map((c,i)=>`<div class="card" style="margin-bottom:10px;display:flex;gap:14px;align-items:center">
-    <div class="num" style="width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:800;flex-shrink:0">${i+1}</div>
-    <div style="flex:1"><b>${c[0]}</b><div style="color:var(--muted);font-size:13.5px">${c[1]}</div></div>
-    <div style="text-align:right;white-space:nowrap"><span class="chip b">${c[2]}</span><div style="color:var(--muted);font-size:12.5px;margin-top:4px">${c[3]}</div></div>
-  </div>`).join("")}
-  <div class="note" style="margin-top:16px"><i class="ph-bold ph-scales"></i> <b>Compliance non-negotiables:</b> AI only calls consented leads · scrub DNC before every call · AI discloses itself & that the line is recorded · honor opt-outs instantly · calling hours 8am–9pm local · a <b>licensed human binds every policy</b> (AI never binds).</div>
-</div>${footer()}`;
-
 /* ---------- Consumer survey ---------- */
 let SV={step:0,a:{}};
 const SVQ=[
@@ -718,8 +689,8 @@ function surveyResult(){
 function appShell(route){
   const u=SESSION, owner=u.role==="owner";
   const items = owner
-    ? [["aicalls","ph-phone-call","AI Sales Engine"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["resources","ph-book-open","Founder Hub"],["profile","ph-gear","Settings"]]
-    : [["dashboard","ph-house","Dashboard"],["marketplace","ph-tag","Buy Leads"],["myleads","ph-list-checks","My Leads"],["wallet","ph-wallet","Wallet"],["resources","ph-book-open","Founder Hub"],["profile","ph-user-gear","My Profile"]];
+    ? [["aicalls","ph-phone-call","AI Sales Engine"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["profile","ph-gear","Settings"]]
+    : [["dashboard","ph-house","Dashboard"],["marketplace","ph-tag","Buy Leads"],["myleads","ph-list-checks","My Leads"],["wallet","ph-wallet","Wallet"],["profile","ph-user-gear","My Profile"]];
   const st=u.status||"approved";
   const badge = st==="approved"?`<span class="badge ok">● Verified</span>`:st==="denied"?`<span class="badge deny">● Denied</span>`:`<span class="badge pend">● Pending</span>`;
   const side=`<aside class="side">
@@ -992,7 +963,7 @@ function aiEngine(){
       </div>`).join("")}</div>
     </div>
   </div>
-  <div class="note info" style="margin-top:18px">▶ This console actually speaks each line aloud using your browser's most natural voice (Web Speech API), so you can hear the experience now. In production it connects to a telephony + neural-voice provider — see <a onclick="nav('resources')">the Build Notes</a> for the exact wiring (Twilio + Vapi/Retell + ElevenLabs) and the realistic-voice setup.</div>
+  <div class="note info" style="margin-top:18px">▶ This console actually speaks each line aloud using your browser's most natural voice (Web Speech API), so you can hear the experience now. In production it connects to a telephony + neural-voice provider — see the Build Notes (Twilio + Vapi/Retell + ElevenLabs) for the exact wiring and the realistic-voice setup.</div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;align-items:start">
     <div class="card">
