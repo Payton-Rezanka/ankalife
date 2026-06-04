@@ -382,6 +382,26 @@ function priceLead(L){
   return ({A:38,B:30,C:24,D:18})[tier]; // shared
 }
 
+/* ---------- Lead category engine (modeled on top vendors: GOAT, Badass, Redbird) ----------
+   Funnels each consumer into a sellable vertical based on their answers. */
+const CATEGORIES=["Veteran","Final Expense","Mortgage Protection","Term Life","IUL / Wealth","Senior / Medicare","Business / Key-Person"];
+function categorize(a){
+  const age=+a.age||40;
+  if(a.military && a.military!=="no") return "Veteran";
+  if(age>=65) return "Senior / Medicare";
+  if((age>=55) && (a.coverage==="<100k"||a.coverage==="100k")) return "Final Expense";
+  if(a.trigger==="mortgage") return "Mortgage Protection";
+  if(a.trigger==="business") return "Business / Key-Person";
+  if((a.income==="150k+"||a.income==="100k") && (a.coverage==="1m+"||a.coverage==="500k")) return "IUL / Wealth";
+  return "Term Life";
+}
+const CAT_ICON={"Veteran":"ph-medal","Final Expense":"ph-flower-lotus","Mortgage Protection":"ph-house-line","Term Life":"ph-umbrella","IUL / Wealth":"ph-trend-up","Senior / Medicare":"ph-first-aid-kit","Business / Key-Person":"ph-briefcase"};
+/* Freshness buckets (real vendors price by age: fresh real-time -> 12mo aged) */
+const FRESH_BUCKETS=[["fresh","Fresh (0–7 days)",0,7],["d8_30","Aged 8–30 days",8,30],["d31_90","Aged 31–90 days",31,90],["d90","Aged 90+ days",91,9999]];
+function leadDays(l){ return l.daysAgo!=null ? l.daysAgo : Math.floor((Date.now()-(l.createdAt||Date.now()))/86400000); }
+function freshKey(l){ const d=leadDays(l); const b=FRESH_BUCKETS.find(x=>d>=x[2]&&d<=x[3]); return b?b[0]:"d90"; }
+function freshLabel(l){ const k=freshKey(l); const b=FRESH_BUCKETS.find(x=>x[0]===k); return b?b[1]:"Aged"; }
+
 /* ---------- Seed marketplace leads ---------- */
 const FIRST=["James","Maria","Robert","Latisha","David","Jennifer","Carlos","Susan","Michael","Aisha","William","Linda","Thomas","Patricia","Kevin","Nicole","Andre","Emily","Hassan","Grace","Daniel","Sofia","Brian","Monica","Raymond","Tanya","Victor","Hannah","George","Diane"];
 const LAST=["Carter","Nguyen","Johnson","Brooks","Patel","Reyes","Thompson","Walker","Morales","Bennett","Foster","Coleman","Rivera","Hughes","Sanders","Price","Ward","Diaz","Khan","Bell","Murphy","Castillo","Watson","Hayes","Long","Ramos","Cole","Fisher","Powell","Greer"];
@@ -402,14 +422,17 @@ function seedLeads(){
       age: 24+Math.floor(Math.random()*55),
       timeframe:rnd(tf), coverage:rnd(cov), trigger:rnd(trig), budget:rnd(bud),
       income:rnd(inc), health:rnd(hlth), existing:rnd(ex), contact:rnd(ct),
-      tobacco: Math.random()<0.22?"yes":"no"
+      tobacco: Math.random()<0.22?"yes":"no",
+      military: Math.random()<0.2?(Math.random()<0.7?"me":"spouse"):"no",
+      dependents: rnd(["0","1","2","3+"])
     };
     const score=scoreLead(a);
     const type=rnd(types);
-    const daysAgo = type==="aged" ? 30+Math.floor(Math.random()*150) : Math.floor(Math.random()*4);
+    const daysAgo = type==="aged" ? 8+Math.floor(Math.random()*180) : Math.floor(Math.random()*8);
     const L={ id:"L"+(1000+i), first:rnd(FIRST), last:rnd(LAST),
       state:rnd(STATES), city:"—", phone:"(555) "+(200+Math.floor(Math.random()*799))+"-"+(1000+Math.floor(Math.random()*8999)),
-      email:"lead"+i+"@example.com", a, score, type, daysAgo, status:"new", source:"Sample data" };
+      email:"lead"+i+"@example.com", a, score, type, daysAgo, status:"new", source:"Sample data",
+      category:categorize(a), createdAt:Date.now()-daysAgo*86400000 };
     L.price=priceLead(L);
     L.recs=recommend(a);
     L.consent={given:true, at:new Date(Date.now()-daysAgo*86400000).toISOString(), method:"Web opt-in (sample data)", text:"Consent to be contacted about life insurance; opt out anytime."};
@@ -460,8 +483,8 @@ function render(route){
   route = route || DB.get('route','home');
   const root=document.getElementById('root');
   // Auth gates
-  if(["dashboard","marketplace","myleads","aicalls","profile","campaigns","wallet"].includes(route) && !SESSION){ route="login"; }
-  const isApp=["dashboard","marketplace","myleads","aicalls","profile","campaigns","wallet"].includes(route);
+  if(["dashboard","marketplace","myleads","aicalls","profile","campaigns","wallet","submissions"].includes(route) && !SESSION){ route="login"; }
+  const isApp=["dashboard","marketplace","myleads","aicalls","profile","campaigns","wallet","submissions"].includes(route);
   if(isApp){ root.innerHTML = topbar(true) + appShell(route); bindApp(route); }
   else { root.innerHTML = topbar(false) + views[route](); bindPublic(route); }
 }
@@ -471,8 +494,7 @@ function topbar(app){
   const right = SESSION
     ? `<a class="navlink" onclick="nav('${SESSION.role==='owner'?'aicalls':'dashboard'}')">My Portal</a>
        <button class="btn btn-ghost btn-sm" onclick="logout()">Log out</button>`
-    : `<a class="navlink" onclick="oneTap('owner')" style="color:var(--gold)"><i class="ph-bold ph-crown"></i> Owner Portal</a>
-       <a class="navlink" onclick="nav('login')">Log in</a>
+    : `<a class="navlink" onclick="nav('login')">Log in</a>
        <button class="btn btn-primary btn-sm" onclick="startOnboard()">Agent Sign-up</button>`;
   return `<header class="nav"><div class="nav-inner">
     <div class="logo" onclick="nav('home')"><span class="mark">A</span> Anka<span style="color:var(--gold)">Life</span></div>
@@ -590,10 +612,9 @@ views.login=()=>`
     <div id="magicMsg"></div>
     <p style="text-align:center;margin-top:16px;font-size:14px;color:var(--muted)">No account? <a onclick="nav('signup')">Sign up as an agent</a></p>
     <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
-      <p style="font-size:11.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:800;margin-bottom:10px">One-tap demo access — no typing</p>
-      <button class="btn btn-primary" style="width:100%;margin-bottom:9px" onclick="oneTap('owner')"><i class="ph-bold ph-crown"></i> Enter Owner Portal — AI Sales Engine</button>
+      <p style="font-size:11.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:800;margin-bottom:10px">One-tap demo — agent side</p>
       <button class="btn btn-outline" style="width:100%" onclick="oneTap('agent')"><i class="ph-bold ph-user"></i> Enter Demo Agent Portal</button>
-      <p style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center">Instantly explore both sides of the platform.</p>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center">The owner portal (AI Sales Engine) is private — sign in with your owner credentials above.</p>
     </div>
   </div>
 </div>`;
@@ -637,22 +658,28 @@ let SV={step:0,a:{}};
 const SVQ=[
   {k:"timeframe",t:"When are you hoping to have coverage in place?",h:"Be honest — there's no wrong answer.",o:[["asap","As soon as possible"],["30days","Within 30 days"],["90days:","In the next few months"],["researching","Just researching for now"]]},
   {k:"coverage",t:"How much coverage are you looking for?",h:"A common rule of thumb is 10× your income.",o:[["1m+","$1,000,000+"],["500k","$500,000"],["250k","$250,000"],["100k","$100,000"],["<100k","Under $100,000 / final expense"]]},
+  {k:"dependents",t:"How many people depend on your income?",h:"This helps size the right coverage.",o:[["0","Just me"],["1","1 person"],["2","2 people"],["3+","3 or more"]]},
   {k:"trigger",t:"What's prompting you to look now?",h:"This helps us match the right policy.",o:[["newbaby","New baby / growing family"],["mortgage","Mortgage / home"],["marriage","Marriage / partner"],["business","Business or key-person need"],["debt","Debt / income protection"],["none","No specific reason"]]},
+  {k:"military",t:"Have you or your spouse served in the U.S. military?",h:"Veterans and families may qualify for special programs.",o:[["me","Yes — I served"],["spouse","Yes — my spouse served"],["no","No"]]},
+  {k:"branch",t:"Thank you for your service. Which branch?",h:"",o:[["army","Army"],["navy","Navy"],["airforce","Air Force"],["marines","Marines"],["coastguard","Coast Guard"],["space","Space Force"]],when:a=>a.military&&a.military!=="no"},
   {k:"age",t:"What's your age?",h:"Rates are based largely on age.",type:"number"},
   {k:"health",t:"How would you describe your health?",h:"",o:[["excellent","Excellent"],["good","Good"],["fair","Fair / some conditions"],["poor","Significant conditions"]]},
+  {k:"conditions",t:"Any of these conditions? (helps us match the right carrier)",h:"",o:[["none","None of these"],["diabetes","Diabetes"],["heart","Heart condition"],["cancer","Cancer history"],["other","Other"]],when:a=>a.health==="fair"||a.health==="poor"},
   {k:"tobacco",t:"Have you used tobacco or nicotine in the last 12 months?",h:"",o:[["no","No"],["yes","Yes"]]},
   {k:"existing",t:"Do you currently have life insurance?",h:"",o:[["none","No coverage"],["some","Some, but not enough"],["old","An old policy I should review"]]},
   {k:"income",t:"What's your approximate household income?",h:"Used to size the right coverage.",o:[["150k+","$150,000+"],["100k","$100,000–150,000"],["60k","$60,000–100,000"],["35k","$35,000–60,000"],["<35k","Under $35,000"]]},
   {k:"budget",t:"Roughly what monthly premium feels comfortable?",h:"",o:[["150+","$150+ / month"],["75-150","$75–150 / month"],["40-75","$40–75 / month"],["<40","Under $40 / month"],["unsure","Not sure yet"]]},
   {k:"contact",t:"When's the best time for a licensed agent to reach you?",h:"",o:[["callnow","Call me now"],["today","Sometime today"],["evening","Evenings"],["email","Email me first"]]}
 ];
+function activeQs(){ return SVQ.filter(q=>!q.when || q.when(SV.a)); }
 views.survey=()=>{
-  if(SV.step>=SVQ.length) return surveyResult();
-  const q=SVQ[SV.step];
+  const qs=activeQs();
+  if(SV.step>=qs.length) return surveyResult();
+  const q=qs[SV.step];
   return `<div class="container" style="max-width:620px">
     <div class="form-card">
-      <div class="progress">${SVQ.map((_,i)=>`<span class="seg ${i<=SV.step?'on':''}"></span>`).join("")}</div>
-      <div class="q"><div class="qh">Step ${SV.step+1} of ${SVQ.length}</div><h3>${q.t}</h3><div class="qh">${q.h||""}</div>
+      <div class="progress">${qs.map((_,i)=>`<span class="seg ${i<=SV.step?'on':''}"></span>`).join("")}</div>
+      <div class="q"><div class="qh">Step ${SV.step+1} of ${qs.length}</div><h3>${q.t}</h3><div class="qh">${q.h||""}</div>
       ${q.type==="number"
         ? `<input id="sv_num" type="number" min="18" max="85" placeholder="Enter age" style="padding:14px;border:1.5px solid var(--line);border-radius:12px;width:100%;font-size:17px">`
         : `<div class="opts">${q.o.map(o=>`<div class="opt ${SV.a[q.k]===o[0]?'sel':''}" onclick="pickSurvey('${q.k}','${o[0]}')"><span class="rad"></span>${o[1]}</div>`).join("")}</div>`}
@@ -710,7 +737,7 @@ function surveyResult(){
 function appShell(route){
   const u=SESSION, owner=u.role==="owner";
   const items = owner
-    ? [["aicalls","ph-phone-call","AI Sales Engine"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["profile","ph-gear","Settings"]]
+    ? [["aicalls","ph-phone-call","AI Sales Engine"],["submissions","ph-database","Lead Intelligence"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["profile","ph-gear","Settings"]]
     : [["dashboard","ph-house","Dashboard"],["marketplace","ph-tag","Buy Leads"],["myleads","ph-list-checks","My Leads"],["wallet","ph-wallet","Wallet"],["profile","ph-user-gear","My Profile"]];
   const st=u.status||"approved";
   const badge = st==="approved"?`<span class="badge ok">● Verified</span>`:st==="denied"?`<span class="badge deny">● Denied</span>`:`<span class="badge pend">● Pending</span>`;
@@ -724,9 +751,11 @@ function appShell(route){
   </aside>`;
   return `<div class="app">${side}<main class="main">${appPage(route)}</main></div>`;
 }
+const OWNER_ONLY=["aicalls","campaigns","submissions"];
 function appPage(route){
   const u=SESSION;
   if(u.status==="denied" && route!=="profile") return deniedPanel();
+  if(OWNER_ONLY.includes(route) && u.role!=="owner") return ownerOnlyPanel();
   switch(route){
     case "dashboard": return agentDashboard();
     case "marketplace": return marketplace();
@@ -734,9 +763,19 @@ function appPage(route){
     case "aicalls": return aiEngine();
     case "campaigns": return campaigns();
     case "wallet": return walletPage();
+    case "submissions": return ownerSubmissions();
     case "profile": return profile();
-    default: return marketplace();
+    default: return u.role==="owner"?aiEngine():marketplace();
   }
+}
+function ownerOnlyPanel(){
+  return `<div class="page-head"><div><h1>Restricted</h1><p>This area is owner-only.</p></div></div>
+  <div class="card" style="text-align:center;padding:50px 20px">
+    <div style="font-size:46px;color:var(--muted)"><i class="ph-duotone ph-lock-key"></i></div>
+    <h3 style="margin:10px 0 6px">The AI Sales Engine is private</h3>
+    <p style="color:var(--muted);max-width:440px;margin:0 auto">Automated calling and campaigns are reserved for the platform owner. Your account is set up to <b>buy and work leads</b> — head to the marketplace to get started.</p>
+    <button class="btn btn-teal" style="margin-top:16px" onclick="nav('marketplace')">Go to Buy Leads →</button>
+  </div>`;
 }
 function deniedPanel(){
   const u=SESSION, r=u.denyReasons||[];
@@ -804,7 +843,7 @@ function agentDashboard(){
 }
 
 /* ---------- Marketplace ---------- */
-let MFILTER={tier:"",type:"",state:"",max:"",match:false};
+let MFILTER={tier:"",type:"",state:"",max:"",match:false,cat:"",fresh:""};
 function availableLeads(){
   const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
   return LEADS.filter(l=>{
@@ -843,30 +882,73 @@ function savePrefs(){
     maxPrice:+document.getElementById('pr_max').value||null, statesOnly:true };
   persistSession(); closeModal(); render(DB.get('route','dashboard'));
 }
-function marketplace(){
+function marketLeads(){
   const base = (MFILTER.match && SESSION.role!=="owner") ? matchedLeads() : availableLeads();
-  let list=base.filter(l=>{
+  return base.filter(l=>{
     if(MFILTER.tier && l.score.tier!==MFILTER.tier) return false;
     if(MFILTER.type && l.type!==MFILTER.type) return false;
+    if(MFILTER.cat && (l.category||categorize(l.a))!==MFILTER.cat) return false;
+    if(MFILTER.fresh && freshKey(l)!==MFILTER.fresh) return false;
     if(MFILTER.state && l.state!==MFILTER.state) return false;
     if(MFILTER.max && l.price>+MFILTER.max) return false;
     return true;
   }).sort((a,b)=>b.score.score-a.score.score);
+}
+function marketplace(){
+  const list=marketLeads();
   const owner=SESSION.role==="owner";
-  return `<div class="page-head"><div><h1>Lead Marketplace</h1><p>${owner?"Work any lead with the AI engine, or claim it.":"Scored, consent-collected life-insurance leads. Buy and start closing."}</p></div></div>
+  const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
+  const buyable=list.filter(l=>!owned.has(l.id));
+  return `<div class="page-head"><div><h1>${owner?"Lead Marketplace":"Buy Leads"}</h1><p>${owner?"Work any lead with the AI engine, or claim it.":"Scored, consent-collected life-insurance leads. Filter, then buy one or many."}</p></div></div>
   <div class="toolbar">
-    <select onchange="setFilter('tier',this.value)"><option value="">All tiers</option><option ${MFILTER.tier==='A'?'selected':''}>A</option><option ${MFILTER.tier==='B'?'selected':''}>B</option><option ${MFILTER.tier==='C'?'selected':''}>C</option><option ${MFILTER.tier==='D'?'selected':''}>D</option></select>
-    <select onchange="setFilter('type',this.value)"><option value="">All types</option>
+    <select onchange="setFilter('cat',this.value)" title="Lead category"><option value="">All categories</option>${CATEGORIES.map(c=>`<option ${MFILTER.cat===c?'selected':''}>${c}</option>`).join("")}</select>
+    <select onchange="setFilter('type',this.value)" title="Delivery type"><option value="">All types</option>
       <option value="livetransfer" ${MFILTER.type==='livetransfer'?'selected':''}>Live transfer</option>
       <option value="exclusive" ${MFILTER.type==='exclusive'?'selected':''}>Exclusive</option>
       <option value="shared" ${MFILTER.type==='shared'?'selected':''}>Shared</option>
       <option value="aged" ${MFILTER.type==='aged'?'selected':''}>Aged</option></select>
+    <select onchange="setFilter('fresh',this.value)" title="How long ago the survey was filled out"><option value="">All ages (freshness)</option>${FRESH_BUCKETS.map(b=>`<option value="${b[0]}" ${MFILTER.fresh===b[0]?'selected':''}>${b[1]}</option>`).join("")}</select>
+    <select onchange="setFilter('tier',this.value)"><option value="">All tiers</option><option ${MFILTER.tier==='A'?'selected':''}>A</option><option ${MFILTER.tier==='B'?'selected':''}>B</option><option ${MFILTER.tier==='C'?'selected':''}>C</option><option ${MFILTER.tier==='D'?'selected':''}>D</option></select>
     <select onchange="setFilter('state',this.value)"><option value="">All states</option>${STATES.map(s=>`<option ${MFILTER.state===s?'selected':''}>${s}</option>`).join("")}</select>
-    <input type="number" placeholder="Max price $" value="${MFILTER.max}" oninput="setFilter('max',this.value)" style="width:130px">
+    <input type="number" placeholder="Max price $" value="${MFILTER.max}" oninput="setFilter('max',this.value)" style="width:120px">
     ${owner?'':`<button class="btn ${MFILTER.match?'btn-teal':'btn-outline'} btn-sm" onclick="setFilter('match',${!MFILTER.match})" title="Show only leads matching your preferences"><i class="ph-duotone ph-sparkle"></i> My matches</button>`}
     <span style="color:var(--muted);font-size:13.5px;margin-left:auto">${list.length} leads</span>
   </div>
+  ${owner||!buyable.length?'':`<div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px;background:var(--sand)">
+    <div style="flex:1;min-width:200px"><b><i class="ph-bold ph-stack"></i> Bulk buy</b><div style="color:var(--muted);font-size:13px">Buy the highest-intent leads matching these filters in one click. ${buyable.length} available.</div></div>
+    <input id="bulkQty" type="number" min="1" max="${buyable.length}" value="${Math.min(10,buyable.length)}" style="width:90px;padding:9px 12px;border:1px solid var(--line);border-radius:9px" placeholder="Qty">
+    <button class="btn btn-teal" onclick="bulkBuyPrompt()"><i class="ph-bold ph-shopping-cart"></i> Buy this many</button>
+  </div>`}
   ${list.length?`<div class="lead-grid">${list.map(l=>leadCard(l,false)).join("")}</div>`:`<div class="empty"><div class="ic"><i class="ph-duotone ph-magnifying-glass"></i></div><p>No leads match your filters.</p></div>`}`;
+}
+function bulkBuyPrompt(){
+  const n=parseInt(document.getElementById('bulkQty')?.value)||0;
+  if(n<1){ alert('Enter how many leads to buy.'); return; }
+  const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
+  const list=marketLeads().filter(l=>!owned.has(l.id)).slice(0,n);
+  if(!list.length){ alert('No leads match your filters.'); return; }
+  const total=list.reduce((s,l)=>s+l.price,0), bal=getBalance();
+  modal(`Buy ${list.length} leads`,`
+    <p style="color:var(--muted);margin-bottom:12px">The <b>${list.length}</b> highest-intent leads matching your current filters${MFILTER.cat?` in <b>${MFILTER.cat}</b>`:''}${MFILTER.fresh?` · ${FRESH_BUCKETS.find(b=>b[0]===MFILTER.fresh)[1]}`:''}.</p>
+    <div class="kv"><div class="k">Leads</div><div>${list.length}</div>
+      <div class="k">Avg price</div><div>$${Math.round(total/list.length)}</div>
+      <div class="k">Total</div><div><b style="font-size:18px">$${total.toLocaleString()}</b></div>
+      <div class="k">Wallet balance</div><div><b style="color:${bal>=total?'var(--good)':'var(--bad)'}">$${bal.toLocaleString()}</b></div></div>
+    ${bal>=total
+      ? `<button class="btn btn-teal" style="width:100%" onclick="bulkBuyConfirm(${n})"><i class="ph ph-lock-simple-open"></i> Pay $${total.toLocaleString()} &amp; unlock ${list.length} leads</button>`
+      : `<div class="alert bad">Your balance is $${(total-bal).toLocaleString()} short.</div><button class="btn btn-teal" style="width:100%" onclick="closeModal();openAddFunds()"><i class="ph ph-plus-circle"></i> Add funds</button>`}
+  `);
+}
+function bulkBuyConfirm(n){
+  const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
+  const list=marketLeads().filter(l=>!owned.has(l.id)).slice(0,n);
+  const total=list.reduce((s,l)=>s+l.price,0);
+  if(getBalance()<total){ closeModal(); openAddFunds(); return; }
+  SESSION.purchased=SESSION.purchased||[];
+  list.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:l.price,status:'new',snapshot:l,boughtAt:Date.now()}); if(l.type==='exclusive'||l.type==='livetransfer'){ l.exclusiveSoldTo=SESSION.id; } });
+  chargeWallet(total, `Bulk purchase — ${list.length} leads`);
+  persistSession(); DB.set('leads',LEADS);
+  closeModal(); nav('myleads');
 }
 function leadCard(l,owned){
   const labelType={livetransfer:"Live Transfer",exclusive:"Exclusive",shared:"Shared",aged:"Aged "+l.daysAgo+"d"}[l.type];
@@ -877,8 +959,9 @@ function leadCard(l,owned){
       <div class="score-badge tier${l.score.tier}"><div class="n">${l.score.score}</div><small>TIER ${l.score.tier}</small></div>
     </div>
     <div class="chips">
+      <span class="chip" style="background:var(--navy);color:#fff"><i class="ph ${CAT_ICON[l.category||categorize(l.a)]}"></i> ${l.category||categorize(l.a)}</span>
       <span class="chip b">${labelType}</span>
-      <span class="chip">${trigLabel(l.a.trigger)}</span>
+      <span class="chip">${freshLabel(l)}</span>
       ${l.a.timeframe==='asap'?'<span class="chip" style="background:#fde8e2;color:#b23d22">Ready now</span>':''}
     </div>
     <div style="font-size:13px;color:var(--muted)">Top match: <b style="color:var(--teal)">${l.recs[0].name.split(" (")[0]}</b></div>
@@ -1205,6 +1288,129 @@ function campaigns(){
   <div class="note">All sequences automatically suppress numbers on the internal &amp; national DNC lists and stop instantly on any opt-out ("STOP", "remove me"), per TCPA. Templates live in the AI Calling Playbook.</div>`;
 }
 
+/* ============================================================
+   OWNER — LEAD INTELLIGENCE (full visibility into every submission)
+   ============================================================ */
+let SUBFILTER={q:"",cat:"",state:"",fresh:"",source:""};
+function surveyPublicLink(){ return location.origin+location.pathname.replace(/index\.html$/,'')+'?goto=survey'; }
+function copySurveyLink(){ navigator.clipboard?.writeText(surveyPublicLink()).then(()=>{const b=document.getElementById('svCopyBtn');if(b){b.innerHTML='<i class="ph-bold ph-check"></i> Copied!';setTimeout(()=>b.innerHTML='<i class="ph-bold ph-copy"></i> Copy link',1800);}}); }
+function surveyAsText(){
+  let t="🛡️ FREE Life Insurance Quote — takes 2 minutes\n\nAnswer a few quick questions and a licensed agent will find you the best coverage at the best price:\n\n";
+  SVQ.filter(q=>!q.when).forEach((q,i)=>{ t+=`${i+1}. ${q.t}\n`; if(q.o) t+="   "+q.o.map(o=>o[1]).join(" / ")+"\n"; });
+  t+=`\n👉 Get your free quote: ${surveyPublicLink()}`;
+  return t;
+}
+function copySurveyText(){ navigator.clipboard?.writeText(surveyAsText()).then(()=>{const b=document.getElementById('svTextBtn');if(b){b.innerHTML='<i class="ph-bold ph-check"></i> Copied!';setTimeout(()=>b.innerHTML='<i class="ph-bold ph-clipboard-text"></i> Copy survey text',1800);}}); }
+function ownerExportCSV(){
+  const cols=["Created","First","Last","Phone","Email","State","ZIP","Age","Category","Tier","Score","Type","Freshness","DaysAgo","Coverage","Dependents","Trigger","Military","Branch","Income","Budget","Health","Conditions","Tobacco","Existing","BestTime","Source","Consent","ConsentAt","Price","Status"];
+  const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;
+  const rows=ownerLeadList(LEADS).map(l=>[
+    l.createdAt?new Date(l.createdAt).toLocaleString():"", l.first, l.last, l.phone, l.email, l.state, l.zip||"", l.a.age,
+    l.category||categorize(l.a), l.score.tier, l.score.score, l.type, freshLabel(l), leadDays(l),
+    covLabel(l.a.coverage), l.a.dependents||"", trigLabel(l.a.trigger), l.a.military||"no", l.a.branch||"",
+    l.a.income, l.a.budget, l.a.health, l.a.conditions||"", l.a.tobacco, l.a.existing, l.a.contact,
+    l.source||"", l.consent?.given?"Yes":"No", l.consent?.at||"", l.price, l.status
+  ].map(esc).join(","));
+  const csv=[cols.join(","),...rows].join("\n");
+  const blob=new Blob([csv],{type:"text/csv"}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download="ankalife-all-submissions.csv"; a.click(); URL.revokeObjectURL(url);
+}
+function ownerLeadList(src){
+  return src.filter(l=>{
+    const cat=l.category||categorize(l.a);
+    if(SUBFILTER.cat && cat!==SUBFILTER.cat) return false;
+    if(SUBFILTER.state && l.state!==SUBFILTER.state) return false;
+    if(SUBFILTER.fresh && freshKey(l)!==SUBFILTER.fresh) return false;
+    if(SUBFILTER.source && (l.source||"")!==SUBFILTER.source) return false;
+    if(SUBFILTER.q){ const s=(l.first+" "+l.last+" "+l.email+" "+l.phone+" "+l.state).toLowerCase(); if(!s.includes(SUBFILTER.q.toLowerCase())) return false; }
+    return true;
+  }).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+}
+function setSub(k,v){ SUBFILTER[k]=v; render('submissions'); }
+function ownerSubmissions(){
+  const all=LEADS, list=ownerLeadList(all);
+  const today=all.filter(l=>leadDays(l)===0).length;
+  const wk=all.filter(l=>leadDays(l)<=7).length;
+  const catCounts={}; all.forEach(l=>{const c=l.category||categorize(l.a); catCounts[c]=(catCounts[c]||0)+1;});
+  const topCat=Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0];
+  const sources=[...new Set(all.map(l=>l.source||"Unknown"))];
+  return `<div class="page-head"><div><h1>Lead Intelligence</h1><p>Every survey submission — who, where, and everything they told us.</p></div>
+    <button class="btn btn-teal" onclick="ownerExportCSV()"><i class="ph ph-download-simple"></i> Export all (CSV)</button></div>
+
+  <div class="card" style="margin-bottom:18px;border-left:3px solid var(--gold)">
+    <h3 style="margin-bottom:4px"><i class="ph-duotone ph-share-network" style="color:var(--gold)"></i> Your survey — share it to collect leads</h3>
+    <p style="color:var(--muted);font-size:13.5px;margin-bottom:10px">Post this link anywhere — social, ads, bio, flyers, QR codes. Every submission lands here.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <input readonly value="${surveyPublicLink()}" onclick="this.select()" style="flex:1;min-width:240px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--cream);font-size:13px">
+      <button class="btn btn-teal btn-sm" id="svCopyBtn" onclick="copySurveyLink()"><i class="ph-bold ph-copy"></i> Copy link</button>
+      <button class="btn btn-outline btn-sm" id="svTextBtn" onclick="copySurveyText()"><i class="ph-bold ph-clipboard-text"></i> Copy survey text</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(surveyPublicLink())}"><i class="ph ph-facebook-logo"></i> Facebook</a>
+      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Get a free life insurance quote in 2 minutes: '+surveyPublicLink())}"><i class="ph ph-whatsapp-logo"></i> WhatsApp</a>
+      <a class="btn btn-outline btn-sm" href="sms:?&body=${encodeURIComponent('Free life insurance quote: '+surveyPublicLink())}"><i class="ph ph-chat-text"></i> Text</a>
+      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${encodeURIComponent('Get a free life insurance quote in 2 minutes: '+surveyPublicLink())}"><i class="ph ph-x-logo"></i> X</a>
+    </div>
+  </div>
+
+  <div class="stat-row">
+    <div class="stat"><div class="lab">Total submissions</div><div class="val">${all.length}</div></div>
+    <div class="stat"><div class="lab">Today</div><div class="val">${today}</div><div class="delta up">fresh</div></div>
+    <div class="stat"><div class="lab">This week</div><div class="val">${wk}</div></div>
+    <div class="stat"><div class="lab">Top category</div><div class="val" style="font-size:20px">${topCat?topCat[0]:'—'}</div><div class="delta">${topCat?topCat[1]+' leads':''}</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h3 style="margin-bottom:8px;font-size:15px">Leads by category</h3>
+    <div class="chips">${CATEGORIES.map(c=>`<span class="chip ${SUBFILTER.cat===c?'':'b'}" style="cursor:pointer;${SUBFILTER.cat===c?'background:var(--teal);color:#fff':''}" onclick="setSub('cat','${SUBFILTER.cat===c?'':c}')"><i class="ph ${CAT_ICON[c]}"></i> ${c} · ${catCounts[c]||0}</span>`).join("")}</div>
+  </div>
+
+  <div class="toolbar">
+    <input placeholder="Search name, email, phone…" value="${SUBFILTER.q}" oninput="SUBFILTER.q=this.value;clearTimeout(window._st);window._st=setTimeout(()=>render('submissions'),350)">
+    <select onchange="setSub('cat',this.value)"><option value="">All categories</option>${CATEGORIES.map(c=>`<option ${SUBFILTER.cat===c?'selected':''}>${c}</option>`).join("")}</select>
+    <select onchange="setSub('fresh',this.value)"><option value="">All freshness</option>${FRESH_BUCKETS.map(b=>`<option value="${b[0]}" ${SUBFILTER.fresh===b[0]?'selected':''}>${b[1]}</option>`).join("")}</select>
+    <select onchange="setSub('state',this.value)"><option value="">All states</option>${STATES.map(s=>`<option ${SUBFILTER.state===s?'selected':''}>${s}</option>`).join("")}</select>
+    <select onchange="setSub('source',this.value)"><option value="">All sources</option>${sources.map(s=>`<option ${SUBFILTER.source===s?'selected':''}>${s}</option>`).join("")}</select>
+    <span style="color:var(--muted);font-size:13.5px;margin-left:auto">${list.length} of ${all.length}</span>
+  </div>
+
+  <div class="card" style="padding:0;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;white-space:nowrap">
+      <thead><tr style="background:var(--sand);text-align:left">
+        ${["Date","Name","Phone","Email","State","ZIP","Age","Category","Tier","Type","Freshness","Coverage","Deps","Trigger","Military","Income","Budget","Health","Tobacco","Existing","Best time","Source","Consent"].map(h=>`<th style="padding:9px 10px;font-weight:700;position:sticky;top:0;background:var(--sand)">${h}</th>`).join("")}
+      </tr></thead>
+      <tbody>
+      ${list.length? list.map(l=>{const c=l.category||categorize(l.a);return `<tr style="border-top:1px solid var(--line);cursor:pointer" onclick="openLead('${l.id}',true)">
+        <td style="padding:8px 10px">${l.createdAt?new Date(l.createdAt).toLocaleDateString():'—'}</td>
+        <td style="padding:8px 10px"><b>${l.first} ${l.last}</b></td>
+        <td style="padding:8px 10px">${l.phone}</td>
+        <td style="padding:8px 10px">${l.email}</td>
+        <td style="padding:8px 10px">${l.state}</td>
+        <td style="padding:8px 10px">${l.zip||'—'}</td>
+        <td style="padding:8px 10px">${l.a.age}</td>
+        <td style="padding:8px 10px"><span class="chip"><i class="ph ${CAT_ICON[c]}"></i> ${c}</span></td>
+        <td style="padding:8px 10px"><span class="score-badge tier${l.score.tier}" style="min-width:34px;padding:2px 6px;display:inline-block"><span class="n" style="font-size:13px">${l.score.score}</span></span></td>
+        <td style="padding:8px 10px">${l.type}</td>
+        <td style="padding:8px 10px">${freshLabel(l)}</td>
+        <td style="padding:8px 10px">${covLabel(l.a.coverage)}</td>
+        <td style="padding:8px 10px">${l.a.dependents||'—'}</td>
+        <td style="padding:8px 10px">${trigLabel(l.a.trigger)}</td>
+        <td style="padding:8px 10px">${l.a.military&&l.a.military!=='no'?'✔ '+l.a.military:'—'}</td>
+        <td style="padding:8px 10px">${l.a.income}</td>
+        <td style="padding:8px 10px">${l.a.budget}</td>
+        <td style="padding:8px 10px">${l.a.health}</td>
+        <td style="padding:8px 10px">${l.a.tobacco}</td>
+        <td style="padding:8px 10px">${l.a.existing}</td>
+        <td style="padding:8px 10px">${l.a.contact}</td>
+        <td style="padding:8px 10px">${l.source||'—'}</td>
+        <td style="padding:8px 10px">${l.consent?.given?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--bad)">✗</span>'}</td>
+      </tr>`;}).join("") : `<tr><td colspan="23" style="padding:30px;text-align:center;color:var(--muted)">No submissions match your filters.</td></tr>`}
+      </tbody>
+    </table>
+  </div>
+  <p style="color:var(--muted);font-size:12.5px;margin-top:10px">Click any row for the full lead profile. Export pulls every field for every submission.</p>`;
+}
+
 /* ---------- Profile / settings ---------- */
 function profile(){
   const u=SESSION, owner=u.role==="owner";
@@ -1416,7 +1622,7 @@ function submitSurvey(){
   const a=SV.a, sc=scoreLead(a);
   const L={ id:"L"+Date.now(), first, last, state, zip,
     phone, email, a, score:sc, type:sc.tier==="A"?"exclusive":"shared", daysAgo:0, status:"new", recs:recommend(a),
-    source:"Web opt-in survey",
+    category:categorize(a), createdAt:Date.now(), source:"Web opt-in survey",
     consent:{ given:true, at:new Date().toISOString(),
       method:"Web form — TCPA prior express written consent",
       text:"Consent to be contacted by AnkaLife & its licensed agents (incl. autodialer, AI/prerecorded voice, SMS, email) about life insurance; opt out anytime via STOP." } };
@@ -1635,8 +1841,10 @@ function val(id){const e=document.getElementById(id);return e?e.value.trim():""}
 
 /* ---------- boot ---------- */
 (function captureRef(){
-  const code=new URLSearchParams(location.search).get('ref');
-  if(code){ DB.set('ref',code); DB.set('route','survey'); }
+  const p=new URLSearchParams(location.search);
+  const code=p.get('ref');
+  if(code){ DB.set('ref',code); DB.set('route','survey'); SV={step:0,a:{}}; }
+  if(p.get('goto')==='survey'){ DB.set('route','survey'); SV={step:0,a:{}}; }
 })();
 render(DB.get('route','home'));
 </script>
