@@ -223,6 +223,7 @@ section.block{padding:64px 22px}
 .pill{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:20px}
 .pill.new{background:#e9f7f0;color:#176b48}.pill.contacted{background:#eef3fb;color:#2f5b9c}
 .pill.appt{background:#fef3e0;color:#a4641a}.pill.sold{background:#e7f0ec;color:#1f6b48}
+.pill.credited{background:#f0e9f5;color:#6b4a86}
 .empty{text-align:center;padding:60px 20px;color:var(--muted)}
 .empty .ic{font-size:46px;margin-bottom:10px}
 footer.ft{background:var(--navy);color:#9fb8bf;padding:40px 22px;text-align:center;font-size:13.5px}
@@ -391,7 +392,7 @@ function findAccount(email){return accounts().find(x=>x.email.toLowerCase()===em
   let a=accounts();
   if(!a.find(x=>x.role==="owner")){
     a.push({id:"owner",role:"owner",name:"Platform Owner",email:"owner@aegislife.ai",password:"owner123",
-      status:"approved",npn:"—",carriers:CARRIERS.slice(0,6),states:["TX","FL","CA","NY"],purchased:[]});
+      status:"approved",npn:"—",carriers:CARRIERS.slice(0,6),states:["TX","FL","CA","NY"],purchased:[],balance:0,transactions:[]});
     saveAccounts(a);
   }
 })();
@@ -422,8 +423,8 @@ function render(route){
   route = route || DB.get('route','home');
   const root=document.getElementById('root');
   // Auth gates
-  if(["dashboard","marketplace","myleads","aicalls","profile","campaigns"].includes(route) && !SESSION){ route="login"; }
-  const isApp=["dashboard","marketplace","myleads","aicalls","profile","campaigns"].includes(route);
+  if(["dashboard","marketplace","myleads","aicalls","profile","campaigns","wallet"].includes(route) && !SESSION){ route="login"; }
+  const isApp=["dashboard","marketplace","myleads","aicalls","profile","campaigns","wallet"].includes(route);
   if(isApp){ root.innerHTML = topbar(true) + appShell(route); bindApp(route); }
   else { root.innerHTML = topbar(false) + views[route](); bindPublic(route); }
 }
@@ -676,11 +677,12 @@ function appShell(route){
   const u=SESSION, owner=u.role==="owner";
   const items = owner
     ? [["aicalls","ph-phone-call","AI Sales Engine"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["resources","ph-book-open","Founder Hub"],["profile","ph-gear","Settings"]]
-    : [["dashboard","ph-house","Dashboard"],["marketplace","ph-tag","Buy Leads"],["myleads","ph-list-checks","My Leads"],["resources","ph-book-open","Founder Hub"],["profile","ph-user-gear","My Profile"]];
+    : [["dashboard","ph-house","Dashboard"],["marketplace","ph-tag","Buy Leads"],["myleads","ph-list-checks","My Leads"],["wallet","ph-wallet","Wallet"],["resources","ph-book-open","Founder Hub"],["profile","ph-user-gear","My Profile"]];
   const st=u.status||"approved";
   const badge = st==="approved"?`<span class="badge ok">● Verified</span>`:st==="denied"?`<span class="badge deny">● Denied</span>`:`<span class="badge pend">● Pending</span>`;
   const side=`<aside class="side">
-    <div class="who"><div class="nm">${u.name}</div><div class="rl">${owner?"Owner · AI Engine":"Licensed Agent"}</div><div>${badge}</div></div>
+    <div class="who"><div class="nm">${u.name}</div><div class="rl">${owner?"Owner · AI Engine":"Licensed Agent"}</div><div>${badge}</div>
+      ${owner?'':`<div onclick="nav('wallet')" style="cursor:pointer;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.12);display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;color:#9fb8bf">Balance</span><b style="color:${getBalance()<50?'#f0a08e':'#7fe3b8'}">$${getBalance().toLocaleString()}</b></div>`}</div>
     <nav>${items.map(i=>`<a class="${route===i[0]?'active':''}" onclick="nav('${i[0]}')"><i class="ph ${i[1]}" style="font-size:18px"></i> ${i[2]}</a>`).join("")}</nav>
     <div style="margin-top:22px;padding:12px;background:rgba(255,255,255,.05);border-radius:12px;font-size:12px;color:#9fb8bf">
       ${owner?"You run the autonomous AI sales engine. Leads you work feed the marketplace.":"Need more leads? Browse the marketplace and filter by tier, state &amp; price."}
@@ -697,6 +699,7 @@ function appPage(route){
     case "myleads": return myLeads();
     case "aicalls": return aiEngine();
     case "campaigns": return campaigns();
+    case "wallet": return walletPage();
     case "profile": return profile();
     default: return marketplace();
   }
@@ -715,7 +718,13 @@ function agentDashboard(){
   const spend=bought.reduce((s,l)=>s+(l.paid||0),0);
   const hot=bought.filter(l=>l.score.tier==="A"||l.score.tier==="B").length;
   return `<div class="page-head"><div><h1>Welcome, ${u.name.split(" ")[0]}</h1><p>Your lead pipeline at a glance.</p></div>
-    <button class="btn btn-teal" onclick="nav('marketplace')">+ Buy more leads</button></div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div onclick="nav('wallet')" style="cursor:pointer;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 14px;text-align:right">
+        <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Balance</div>
+        <div style="font-size:18px;font-weight:800;color:${getBalance()<50?'var(--bad)':'var(--teal)'}">$${getBalance().toLocaleString()}</div>
+      </div>
+      <button class="btn btn-teal" onclick="nav('marketplace')"><i class="ph ph-tag"></i> Buy more leads</button>
+    </div></div>
   <div class="stat-row">
     <div class="stat"><div class="lab">Leads owned</div><div class="val">${bought.length}</div><div class="delta up">live pipeline</div></div>
     <div class="stat"><div class="lab">Hot (A/B)</div><div class="val">${hot}</div><div class="delta up">prioritize these</div></div>
@@ -787,7 +796,7 @@ function leadCard(l,owned){
 }
 function covLabel(c){return {"1m+":"$1M+","500k":"$500k","250k":"$250k","100k":"$100k","<100k":"Final expense"}[c]||c}
 function trigLabel(t){return {newbaby:"New baby",mortgage:"Mortgage",marriage:"Marriage",business:"Business",debt:"Debt/income",none:"General"}[t]||t}
-function statusLabel(s){return {new:"New",contacted:"Contacted",appt:"Appt set",sold:"Sold"}[s]||s}
+function statusLabel(s){return {new:"New",contacted:"Contacted",appt:"Appt set",sold:"Sold",credited:"Credited"}[s]||s}
 
 /* ---------- My leads ---------- */
 function myLeads(){
@@ -816,6 +825,47 @@ function exportLeadsCSV(){
   const csv=[cols.join(","),...rows].join("\n");
   const blob=new Blob([csv],{type:"text/csv"}); const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download="aegis-leads.csv"; a.click(); URL.revokeObjectURL(url);
+}
+
+/* ---------- Wallet page ---------- */
+function walletPage(){
+  const bal=getBalance(), txns=SESSION.transactions||[];
+  const spent=txns.filter(t=>t.type==='purchase').reduce((s,t)=>s+Math.abs(t.amt),0);
+  const credited=txns.filter(t=>t.type==='credit').reduce((s,t)=>s+t.amt,0);
+  return `<div class="page-head"><div><h1>Wallet</h1><p>Pre-fund your balance and buy leads instantly — no checkout each time.</p></div>
+    <button class="btn btn-teal" onclick="openAddFunds()"><i class="ph ph-plus-circle"></i> Add funds</button></div>
+  <div class="stat-row">
+    <div class="stat"><div class="lab">Available balance</div><div class="val" style="color:var(--teal)">$${bal.toLocaleString()}</div><div class="delta ${bal<50?'down':'up'}">${bal<50?'low — top up to keep buying':'ready to buy'}</div></div>
+    <div class="stat"><div class="lab">Total spent</div><div class="val">$${spent.toLocaleString()}</div><div class="delta">on leads</div></div>
+    <div class="stat"><div class="lab">Credited back</div><div class="val">$${credited.toLocaleString()}</div><div class="delta up">quality guarantee</div></div>
+    <div class="stat"><div class="lab">Leads owned</div><div class="val">${(SESSION.purchased||[]).length}</div></div>
+  </div>
+  <div class="card" style="margin-bottom:18px">
+    <h3 style="margin-bottom:4px">Add funds</h3>
+    <p style="color:var(--muted);font-size:13.5px;margin-bottom:12px">Choose an amount. (Demo — no real card is charged. In production this runs through Stripe.)</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      ${[100,250,500,1000,2500].map(a=>`<button class="btn btn-outline" onclick="addFunds(${a});render('wallet')">+$${a.toLocaleString()}</button>`).join("")}
+    </div>
+  </div>
+  <div class="card">
+    <h3 style="margin-bottom:10px">Transaction history</h3>
+    ${txns.length? `<div style="display:grid;gap:8px">${txns.map(t=>`
+      <div class="callrow" style="background:var(--sand);color:var(--ink)">
+        <i class="ph ${txnIcon(t.type)}" style="font-size:20px;color:${t.amt>=0?'var(--good)':'var(--ink)'}"></i>
+        <div class="meta" style="flex:1"><b>${t.desc}</b><br><small style="color:var(--muted)">${new Date(t.at).toLocaleString()}</small></div>
+        <div style="text-align:right"><b style="color:${t.amt>=0?'var(--good)':'var(--bad)'}">${t.amt>=0?'+':'−'}$${Math.abs(t.amt).toLocaleString()}</b><br><small style="color:var(--muted)">bal $${(t.bal||0).toLocaleString()}</small></div>
+      </div>`).join("")}</div>`
+    : `<div class="empty" style="padding:30px"><div class="ic"><i class="ph-duotone ph-receipt"></i></div><p>No transactions yet. Add funds to get started.</p></div>`}
+  </div>`;
+}
+function openAddFunds(){
+  modal("Add funds to your balance",`
+    <p style="color:var(--muted);margin-bottom:14px">Select an amount to add. Demo only — no real charge. Production uses Stripe.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      ${[100,250,500,1000,2500,5000].map(a=>`<button class="btn btn-outline" onclick="addFunds(${a});closeModal();render(DB.get('route','wallet'))">+ $${a.toLocaleString()}</button>`).join("")}
+    </div>
+    <div class="note info" style="margin-top:14px">Funds are stored to your account balance and used automatically when you buy leads.</div>
+  `);
 }
 
 /* ============================================================
@@ -1195,7 +1245,7 @@ function obFinish(){
     npn:a.npn, licenseNumber:a.licenseNumber, licenseState:a.licenseState, lineLife:a.lineLife,
     states:a.states, carriers:a.carriers, status:v.approved?"approved":"denied", denyReasons:v.reasons, verify:v };
   if(acc){ Object.assign(acc,data); const all=accounts(); const i=all.findIndex(x=>x.id===acc.id); all[i]=acc; saveAccounts(all); SESSION=acc; }
-  else { acc={ id:"a"+Date.now(), purchased:[], ...data }; const all=accounts(); all.push(acc); saveAccounts(all); SESSION=acc; }
+  else { acc={ id:"a"+Date.now(), purchased:[], balance:0, transactions:[], ...data }; const all=accounts(); all.push(acc); saveAccounts(all); SESSION=acc; }
   DB.set('session',SESSION); OB={step:0,a:{states:[],carriers:[]}};
   nav(v.approved?"dashboard":"profile");
 }
@@ -1214,7 +1264,7 @@ function doSignup(){
   const v=verifyLicense(app);
   const acc={ id:"a"+Date.now(), role:"agent", name:app.name, agency:app.agency, email:app.email, password:app.password,
     npn:app.npn, licenseNumber:app.licenseNumber, licenseState:app.licenseState, lineLife:app.lineLife,
-    states:app.states, carriers:app.carriers, purchased:[],
+    states:app.states, carriers:app.carriers, purchased:[], balance:0, transactions:[],
     status: v.approved?"approved":"denied", denyReasons:v.reasons, verify:v };
   const all=accounts(); all.push(acc); saveAccounts(all);
   SESSION=acc; DB.set('session',acc);
@@ -1265,20 +1315,28 @@ function buyLead(id){
 function selectAndGo(id){ nav('aicalls'); setTimeout(()=>selectCallLead(id),200); }
 
 function openCheckout(l){
+  const bal=getBalance(), enough=bal>=l.price;
   modal(`Confirm purchase`, `
     <div class="kv"><div class="k">Lead</div><div>${l.first} ${l.last[0]}. · ${l.state}</div>
       <div class="k">Type</div><div>${l.type}${l.type==='aged'?' ('+l.daysAgo+'d)':''}</div>
       <div class="k">Intent tier</div><div>Tier ${l.score.tier} · score ${l.score.score}/100</div>
       <div class="k">Top carrier match</div><div>${l.recs[0].name}</div></div>
-    <div class="alert ok" style="display:flex;justify-content:space-between;align-items:center"><span>Total due</span><b style="font-size:22px">$${l.price}</b></div>
-    <div class="note info">Demo checkout — no card is charged. In production this runs through your payment processor (e.g., Stripe). Full contact details unlock immediately after purchase.</div>
-    <button class="btn btn-teal" style="width:100%" onclick="confirmBuy('${l.id}')">Pay $${l.price} &amp; unlock lead</button>
+    <div class="alert ok" style="display:flex;justify-content:space-between;align-items:center"><span>Lead price</span><b style="font-size:22px">$${l.price}</b></div>
+    <div class="kv" style="margin:4px 0"><div class="k">Wallet balance</div><div><b style="color:${enough?'var(--good)':'var(--bad)'}">$${bal.toLocaleString()}</b></div>
+      <div class="k">After purchase</div><div>$${(bal-l.price).toLocaleString()}</div></div>
+    ${enough
+      ? `<div class="note info">Paid instantly from your balance. Full contact details unlock immediately. (Demo — no card charged; production via Stripe.)</div>
+         <button class="btn btn-teal" style="width:100%" onclick="confirmBuy('${l.id}')"><i class="ph ph-lock-simple-open"></i> Pay $${l.price} from balance &amp; unlock</button>`
+      : `<div class="alert bad">Your balance is $${(l.price-bal).toLocaleString()} short for this lead.</div>
+         <button class="btn btn-teal" style="width:100%" onclick="closeModal();openAddFunds()"><i class="ph ph-plus-circle"></i> Add funds</button>`}
   `);
 }
 function confirmBuy(id){
   const l=LEADS.find(x=>x.id===id);
+  if(getBalance()<l.price){ closeModal(); openAddFunds(); return; }
   SESSION.purchased=SESSION.purchased||[];
   SESSION.purchased.push({id:l.id,paid:l.price,status:"new",snapshot:l,boughtAt:Date.now()});
+  chargeWallet(l.price, `Lead: ${l.first} ${l.last[0]}. · ${l.state} · Tier ${l.score.tier}`);
   if(l.type==="exclusive"||l.type==="livetransfer"){ l.exclusiveSoldTo=SESSION.id; }
   persistSession(); DB.set('leads',LEADS);
   closeModal(); nav('myleads');
@@ -1286,6 +1344,39 @@ function confirmBuy(id){
 function persistSession(){
   const all=accounts(); const i=all.findIndex(a=>a.id===SESSION.id);
   if(i>=0){ all[i]=SESSION; saveAccounts(all); } DB.set('session',SESSION);
+}
+
+/* ============================================================
+   WALLET / FUNDING  (mirrors real lead-vendor prepaid balance)
+   ============================================================ */
+function getBalance(){ return SESSION.balance||0; }
+function logTxn(type,amt,desc){ SESSION.transactions=SESSION.transactions||[];
+  SESSION.transactions.unshift({id:"T"+Date.now()+Math.floor(Math.random()*99),type,amt,desc,at:Date.now(),bal:(SESSION.balance||0)}); }
+function addFunds(amt){ SESSION.balance=(SESSION.balance||0)+amt; logTxn('deposit',amt,'Added funds to balance'); persistSession(); }
+function chargeWallet(amt,desc){ SESSION.balance=(SESSION.balance||0)-amt; logTxn('purchase',-amt,desc); }
+function refundWallet(amt,desc){ SESSION.balance=(SESSION.balance||0)+amt; logTxn('credit',amt,desc); }
+function txnIcon(t){return {deposit:'ph-plus-circle',purchase:'ph-tag',credit:'ph-arrow-counter-clockwise'}[t]||'ph-circle'}
+
+/* Lead credit / return policy — auto-decisioned like a real vendor.
+   Replaceable reasons (wrong #, disconnected, duplicate) are credited within the
+   return window; "didn't answer" / "not interested" are NOT (a valid lead can still
+   be a non-answer). 7-day return window from purchase. */
+const CREDIT_REASONS=[
+  ["wrongnumber","Wrong / invalid phone number",true],
+  ["disconnected","Number disconnected or unreachable",true],
+  ["duplicate","Duplicate of a lead I already bought",true],
+  ["fakeinfo","Obviously fake / bogus information",true],
+  ["wrongstate","Not in a state I'm licensed in",true],
+  ["noanswer","Couldn't reach them after attempts",false],
+  ["notinterested","Said they weren't interested",false],
+  ["changedmind","I changed my mind",false]
+];
+function creditDecision(purchase, reasonKey){
+  const r=CREDIT_REASONS.find(x=>x[0]===reasonKey);
+  const days=(Date.now()-(purchase.boughtAt||Date.now()))/86400000;
+  if(days>7) return {approved:false, reason:"This lead is outside the 7-day return window, so it's no longer eligible for a credit."};
+  if(!r||!r[2]) return {approved:false, reason:`Credits aren't issued for "${r?r[1]:reasonKey}". A lead is still valid even if the prospect doesn't answer or declines — that's the nature of outbound. Credits cover bad data (wrong number, disconnected, duplicate, fake, or out-of-state) only.`};
+  return {approved:true, reason:`Approved — "${r[1]}" qualifies under our lead-quality guarantee. Your balance has been credited.`};
 }
 
 function openLead(id,owned){
@@ -1317,9 +1408,13 @@ function openLead(id,owned){
     </div>
     <div style="margin-top:18px">${
       isOwned
-       ? (SESSION.role==="owner"? `<button class="btn btn-primary" style="width:100%" onclick="closeModal();selectAndGo('${l.id}')">📞 Send to AI Sales Engine</button>`
-          : `<div class="alert ok">You own this lead. Status: <b>${statusLabel(l.status||'new')}</b>. Update status below.</div>
-             <div style="display:flex;gap:8px;flex-wrap:wrap">${['new','contacted','appt','sold'].map(s=>`<button class="btn btn-outline btn-sm" onclick="setLeadStatus('${l.id}','${s}')">${statusLabel(s)}</button>`).join("")}</div>`)
+       ? (SESSION.role==="owner"? `<button class="btn btn-primary" style="width:100%" onclick="closeModal();selectAndGo('${l.id}')"><i class="ph ph-phone-call"></i> Send to AI Sales Engine</button>`
+          : (l.status==='credited'
+            ? `<div class="alert ok"><i class="ph-bold ph-arrow-counter-clockwise"></i> This lead was credited back to your wallet. It no longer counts toward your pipeline.</div>`
+            : `<div class="alert ok">You own this lead. Status: <b>${statusLabel(l.status||'new')}</b>. Update status below.</div>
+             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${['new','contacted','appt','sold'].map(s=>`<button class="btn btn-outline btn-sm" onclick="setLeadStatus('${l.id}','${s}')">${statusLabel(s)}</button>`).join("")}</div>
+             <div style="border-top:1px solid var(--line);padding-top:12px"><button class="btn btn-outline btn-sm" onclick="requestCredit('${l.id}')"><i class="ph ph-seal-warning"></i> Request a credit (bad lead)</button>
+             <span style="color:var(--muted);font-size:12.5px;margin-left:8px">7-day quality guarantee</span></div>`))
        : `<button class="btn btn-teal" style="width:100%" onclick="closeModal();buyLead('${l.id}')">Buy this lead — $${l.price}</button>`
     }</div>
   `);
@@ -1327,6 +1422,31 @@ function openLead(id,owned){
 function setLeadStatus(id,s){
   const p=(SESSION.purchased||[]).find(p=>p.id===id); if(p){p.status=s;persistSession();}
   closeModal(); render(DB.get('route','myleads'));
+}
+function requestCredit(id){
+  const p=(SESSION.purchased||[]).find(p=>p.id===id); if(!p) return;
+  modal("Request a lead credit",`
+    <p style="color:var(--muted);margin-bottom:14px">Tell us what was wrong. Bad-data leads are credited automatically under our 7-day quality guarantee. Paid: <b>$${p.paid}</b>.</p>
+    <div class="field"><label>Reason</label>
+      <select id="cr_reason">${CREDIT_REASONS.map(r=>`<option value="${r[0]}">${r[1]}</option>`).join("")}</select></div>
+    <div class="field"><label>Notes (optional)</label><textarea id="cr_notes" rows="2" placeholder="Anything else we should know"></textarea></div>
+    <div class="note info">Credits cover bad data only (wrong number, disconnected, duplicate, fake, out-of-state). A valid lead who simply doesn't answer or declines isn't eligible.</div>
+    <button class="btn btn-teal" style="width:100%" onclick="submitCredit('${id}')">Submit credit request</button>
+  `);
+}
+function submitCredit(id){
+  const p=(SESSION.purchased||[]).find(p=>p.id===id); if(!p) return;
+  const reason=document.getElementById('cr_reason').value;
+  const d=creditDecision(p,reason);
+  if(d.approved){
+    refundWallet(p.paid, `Credit: ${p.snapshot?.first||'lead'} ${p.snapshot?.last?.[0]||''}. (${CREDIT_REASONS.find(r=>r[0]===reason)[1]})`);
+    p.status='credited'; p.creditedAt=Date.now(); persistSession();
+  }
+  modal(d.approved?"Credit approved":"Credit not approved",`
+    <div class="alert ${d.approved?'ok':'bad'}"><b>${d.approved?'✓ Approved':'Not eligible'}</b><br>${d.reason}</div>
+    ${d.approved?`<div class="kv"><div class="k">Credited</div><div><b style="color:var(--good)">+$${p.paid}</b></div><div class="k">New balance</div><div>$${getBalance().toLocaleString()}</div></div>`:''}
+    <button class="btn btn-teal" style="width:100%" onclick="closeModal();render(DB.get('route','myleads'))">Done</button>
+  `);
 }
 
 function saveProfile(){
