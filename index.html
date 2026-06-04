@@ -548,7 +548,7 @@ views.login=()=>`
     <div class="field"><label>Password</label><input id="li_pass" type="password" placeholder="••••••••"></div>
     <button class="btn btn-teal" style="width:100%" onclick="doLogin()">Log in</button>
     <div style="display:flex;align-items:center;gap:12px;margin:16px 0;color:var(--muted);font-size:13px"><span style="flex:1;height:1px;background:var(--line)"></span>or<span style="flex:1;height:1px;background:var(--line)"></span></div>
-    <button class="btn btn-outline" style="width:100%" onclick="sendMagicLink()">✉️ Email me a magic link (no password)</button>
+    <button class="btn btn-outline" style="width:100%" onclick="sendMagicLink()"><i class="ph ph-envelope-simple"></i> Email me a magic link (no password)</button>
     <div id="magicMsg"></div>
     <p style="text-align:center;margin-top:16px;font-size:14px;color:var(--muted)">No account? <a onclick="nav('signup')">Sign up as an agent</a></p>
     <div class="note info" style="margin-top:18px"><b>Demo logins</b><br>Owner (AI sales engine): <b>owner@aegislife.ai</b> / <b>owner123</b><br>Or create an agent account to see the marketplace.</div>
@@ -605,16 +605,16 @@ views.resources=()=>`
   <div class="page-head"><div><h1>Founder Resources</h1><p>Your playbook for turning this platform into a real, legal company.</p></div>
     <button class="btn btn-outline btn-sm" onclick="history.length>1?history.back():nav('home')">← Back</button></div>
   <div class="card" style="margin-bottom:18px">
-    <h3 style="margin-bottom:6px">📘 Full Founder's Packet</h3>
+    <h3 style="margin-bottom:6px"><i class="ph-duotone ph-book-open" style="color:var(--teal)"></i> Full Founder's Packet</h3>
     <p style="color:var(--muted);font-size:14px">The complete coaching manual — business models, LLC/EIN/bank setup, getting licensed, buying a domain, the prototype→production stack, a compliance checklist, unit economics, and a 30/60/90-day plan — lives in <b>FOUNDER_PACKET.md</b> next to this file. The build/wiring details are in <b>BUILD_NOTES.md</b>.</p>
   </div>
-  <h3 style="margin:6px 0 12px">🚀 Launch checklist</h3>
+  <h3 style="margin:6px 0 12px"><i class="ph-duotone ph-rocket-launch" style="color:var(--teal)"></i> Launch checklist</h3>
   ${LAUNCH_CHECKLIST.map((c,i)=>`<div class="card" style="margin-bottom:10px;display:flex;gap:14px;align-items:center">
     <div class="num" style="width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:800;flex-shrink:0">${i+1}</div>
     <div style="flex:1"><b>${c[0]}</b><div style="color:var(--muted);font-size:13.5px">${c[1]}</div></div>
     <div style="text-align:right;white-space:nowrap"><span class="chip b">${c[2]}</span><div style="color:var(--muted);font-size:12.5px;margin-top:4px">${c[3]}</div></div>
   </div>`).join("")}
-  <div class="note" style="margin-top:16px">⚖️ <b>Compliance non-negotiables:</b> AI only calls consented leads · scrub DNC before every call · AI discloses itself & that the line is recorded · honor opt-outs instantly · calling hours 8am–9pm local · a <b>licensed human binds every policy</b> (AI never binds).</div>
+  <div class="note" style="margin-top:16px"><i class="ph-bold ph-scales"></i> <b>Compliance non-negotiables:</b> AI only calls consented leads · scrub DNC before every call · AI discloses itself & that the line is recorded · honor opt-outs instantly · calling hours 8am–9pm local · a <b>licensed human binds every policy</b> (AI never binds).</div>
 </div>${footer()}`;
 
 /* ---------- Consumer survey ---------- */
@@ -653,7 +653,7 @@ function surveyResult(){
   const a=SV.a, sc=scoreLead(a), recs=recommend(a);
   return `<div class="container" style="max-width:640px">
     <div class="form-card" style="text-align:center">
-      <div style="font-size:46px">✅</div>
+      <div style="font-size:46px;color:var(--good)"><i class="ph-duotone ph-seal-check"></i></div>
       <h1 style="font-size:24px;margin:6px 0">Thanks — you're matched!</h1>
       <p style="color:var(--muted)">Based on your answers, here's what a licensed agent will see. A vetted agent will reach out ${a.contact==='callnow'?'shortly':'at your preferred time'}.</p>
       <div style="display:inline-flex;gap:14px;align-items:center;margin:18px 0;padding:14px 22px;background:var(--sand);border-radius:14px">
@@ -729,7 +729,7 @@ function agentDashboard(){
     <div class="chips">${(u.states||[]).map(s=>`<span class="chip b">${s}</span>`).join("")||'<span class="chip b">No states yet</span>'}</div>
   </div>
   ${bought.length? `<h3 style="margin:22px 0 12px">Recent leads</h3><div class="lead-grid">${bought.slice(0,6).map(l=>leadCard(l,true)).join("")}</div>`
-    : `<div class="empty"><div class="ic">🗂️</div><p>No leads yet. Head to the <a onclick="nav('marketplace')">marketplace</a> to buy your first scored lead.</p></div>`}`;
+    : `<div class="empty"><div class="ic"><i class="ph-duotone ph-folder-open"></i></div><p>No leads yet. Head to the <a onclick="nav('marketplace')">marketplace</a> to buy your first scored lead.</p></div>`}`;
 }
 
 /* ---------- Marketplace ---------- */
@@ -763,7 +763,7 @@ function marketplace(){
     <input type="number" placeholder="Max price $" value="${MFILTER.max}" oninput="setFilter('max',this.value)" style="width:130px">
     <span style="color:var(--muted);font-size:13.5px;margin-left:auto">${list.length} leads</span>
   </div>
-  ${list.length?`<div class="lead-grid">${list.map(l=>leadCard(l,false)).join("")}</div>`:`<div class="empty"><div class="ic">🔍</div><p>No leads match your filters.</p></div>`}`;
+  ${list.length?`<div class="lead-grid">${list.map(l=>leadCard(l,false)).join("")}</div>`:`<div class="empty"><div class="ic"><i class="ph-duotone ph-magnifying-glass"></i></div><p>No leads match your filters.</p></div>`}`;
 }
 function leadCard(l,owned){
   const labelType={livetransfer:"Live Transfer",exclusive:"Exclusive",shared:"Shared",aged:"Aged "+l.daysAgo+"d"}[l.type];
@@ -792,10 +792,10 @@ function statusLabel(s){return {new:"New",contacted:"Contacted",appt:"Appt set",
 /* ---------- My leads ---------- */
 function myLeads(){
   const b=ownedLeads();
-  if(!b.length) return `<div class="page-head"><div><h1>My Leads</h1></div></div><div class="empty"><div class="ic">📋</div><p>You haven't purchased any leads yet. <a onclick="nav('marketplace')">Browse the marketplace →</a></p></div>`;
+  if(!b.length) return `<div class="page-head"><div><h1>My Leads</h1></div></div><div class="empty"><div class="ic"><i class="ph-duotone ph-clipboard-text"></i></div><p>You haven't purchased any leads yet. <a onclick="nav('marketplace')">Browse the marketplace →</a></p></div>`;
   const byStatus=s=>b.filter(l=>(l.status||'new')===s).length;
   return `<div class="page-head"><div><h1>My Leads</h1><p>${b.length} leads · full contact details unlocked.</p></div>
-    <button class="btn btn-outline btn-sm" onclick="exportLeadsCSV()">⬇ Export CSV</button></div>
+    <button class="btn btn-outline btn-sm" onclick="exportLeadsCSV()"><i class="ph ph-download-simple"></i> Export CSV</button></div>
   <div class="stat-row">
     <div class="stat"><div class="lab">New</div><div class="val">${byStatus('new')}</div></div>
     <div class="stat"><div class="lab">Contacted</div><div class="val">${byStatus('contacted')}</div></div>
@@ -843,8 +843,8 @@ function aiEngine(){
           <span style="font-size:12px;color:#9fb8bf">Tone:</span>
           <select id="tonePick"><option value="warm">Warm &amp; reassuring</option><option value="calm">Calm &amp; slow</option><option value="confident">Confident advisor</option></select>
         </div>
-        <button class="btn btn-primary btn-sm" id="callBtn" onclick="startAICall()" disabled>▶ Start AI Call</button>
-        <button class="btn btn-outline btn-sm" onclick="stopAICall()">■ Stop</button>
+        <button class="btn btn-primary btn-sm" id="callBtn" onclick="startAICall()" disabled><i class="ph-bold ph-play"></i> Start AI Call</button>
+        <button class="btn btn-outline btn-sm" onclick="stopAICall()"><i class="ph-bold ph-stop"></i> Stop</button>
       </div>
     </div>
     <div class="card">
@@ -1111,9 +1111,9 @@ function sendMagicLink(){
   const token="ml_"+Math.random().toString(36).slice(2,10);
   DB.set('magic_'+email.toLowerCase(), {token, at:Date.now()});
   box.innerHTML=`<div class="alert ok" style="text-align:left">
-    <b>✉️ Magic link "sent" to ${email}</b>
+    <b><i class="ph ph-envelope-simple-open"></i> Magic link "sent" to ${email}</b>
     <p style="margin:6px 0 10px;font-size:13.5px">In production this is a real email. For the demo, click your link below — it expires in 10 minutes and logs you in with no password.</p>
-    <button class="btn btn-teal btn-sm" onclick="useMagicLink('${email}','${token}')">🔗 Open my magic link${acc?"":" (creates account)"}</button>
+    <button class="btn btn-teal btn-sm" onclick="useMagicLink('${email}','${token}')"><i class="ph ph-link"></i> Open my magic link${acc?"":" (creates account)"}</button>
   </div>`;
 }
 function useMagicLink(email,token){
@@ -1159,7 +1159,7 @@ views.onboard=()=>{
     ${v? (v.approved?`<div class="alert ok"><b>✅ Approved</b> — your license cleared the automated ${v.source} check.</div>`
       :`<div class="alert bad"><b>Result: Denied.</b> Here's exactly what to fix:</div><ol style="padding-left:20px;color:var(--muted);line-height:1.8">${v.reasons.map(r=>`<li>${r}</li>`).join("")}</ol>`)
     :`<div class="note info">Press <b>Run verification</b> to check your credentials in real time.</div>`}`; }
-  if(s===4) body=`<div style="text-align:center"><div style="font-size:46px">🎉</div>
+  if(s===4) body=`<div style="text-align:center"><div style="font-size:46px;color:var(--gold)"><i class="ph-duotone ph-confetti"></i></div>
     <h1 style="font-size:23px;margin:6px 0">You're all set, ${(a.name||'Agent').split(' ')[0]}!</h1>
     <p style="color:var(--muted)">Here's your welcome packet — everything you need to start closing.</p></div>
     <div class="recs" style="margin-top:16px">
@@ -1220,14 +1220,14 @@ function doSignup(){
   SESSION=acc; DB.set('session',acc);
   if(v.approved){
     document.getElementById('root').innerHTML=topbar(true)+`<div class="container" style="max-width:560px"><div class="form-card" style="text-align:center">
-      <div style="font-size:48px">🎉</div><h1 style="font-size:24px;margin:8px 0">You're verified!</h1>
+      <div style="font-size:48px;color:var(--good)"><i class="ph-duotone ph-seal-check"></i></div><h1 style="font-size:24px;margin:8px 0">You're verified!</h1>
       <div class="alert ok">Your license cleared the automated NIPR Producer Database check. Your account is active.</div>
       <p style="color:var(--muted)">You can now buy scored leads, manage your carriers &amp; states, and start closing.</p>
       <button class="btn btn-teal" style="margin-top:16px" onclick="nav('dashboard')">Go to my dashboard →</button>
     </div></div>`;
   } else {
     document.getElementById('root').innerHTML=topbar(true)+`<div class="container" style="max-width:600px"><div class="form-card">
-      <div style="font-size:44px;text-align:center">⚠️</div><h1 style="font-size:23px;text-align:center;margin:6px 0">Verification could not be completed</h1>
+      <div style="font-size:44px;text-align:center;color:var(--warn)"><i class="ph-duotone ph-warning-circle"></i></div><h1 style="font-size:23px;text-align:center;margin:6px 0">Verification could not be completed</h1>
       <div class="alert bad"><b>Result: Denied</b> — checked against ${v.source}.</div>
       <p style="font-weight:700;margin-bottom:6px">Here's exactly what to fix:</p>
       <ol style="padding-left:20px;color:var(--muted);line-height:1.8">${v.reasons.map(r=>`<li>${r}</li>`).join("")}</ol>
@@ -1246,7 +1246,7 @@ function submitSurvey(){
   L.price=priceLead(L); LEADS.unshift(L); DB.set('leads',LEADS);
   SV={step:0,a:{}};
   document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
-    <div style="font-size:48px">📨</div><h1 style="font-size:23px;margin:8px 0">You're all set!</h1>
+    <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">You're all set!</h1>
     <p style="color:var(--muted)">Your information has been sent to a licensed agent in your area. Expect a call from a friendly advisor soon. Stay safe out there.</p>
     <button class="btn btn-teal" style="margin-top:16px" onclick="nav('home')">Back to home</button></div></div>`;
 }
@@ -1295,7 +1295,7 @@ function openLead(id,owned){
   const contact = isOwned
     ? `<div class="kv"><div class="k">Full name</div><div>${l.first} ${l.last}</div><div class="k">Phone</div><div>${l.phone}</div><div class="k">Email</div><div>${l.email}</div></div>`
     : `<div class="kv"><div class="k">Full name</div><div class="locked">${l.first} ${l.last}</div><div class="k">Phone</div><div class="locked">(555) 555-1234</div><div class="k">Email</div><div class="locked">hidden@until.purchase</div></div>
-       <div class="note">🔒 Contact details unlock after purchase.</div>`;
+       <div class="note"><i class="ph-bold ph-lock-simple"></i> Contact details unlock after purchase.</div>`;
   const sf=l.score.factors.map(f=>{const pct=Math.round(f.pts/f.max*100);const col=pct>=70?'var(--good)':pct>=40?'var(--warn)':'var(--bad)';
     return `<div class="sf"><div>${f.label}</div><div class="bar"><i style="width:${pct}%;background:${col}"></i></div><div style="text-align:right;font-weight:700">${f.pts}/${f.max}</div></div>`;}).join("");
   modal(`${isOwned?l.first+" "+l.last:l.first+" "+l.last[0]+"."} · Tier ${l.score.tier}`, `
