@@ -296,8 +296,8 @@ footer.ft a{color:#cfe0e6}
 /* ============================================================
    ANKALIFE — AI Life Insurance Lead Platform (demo build)
    Single-file front-end. Data persists in localStorage.
-   Pricing benchmarks from real lead vendors (2025):
-   shared $20-40 | exclusive $75-150 | live-transfer $80-200 | aged $5-15
+   Pricing benchmarks from real lead vendors (2025-26, recalibrated to mainstream):
+   shared $10-25 | exclusive $30-75 | live-transfer $48-100 | aged $1-14
    ============================================================ */
 
 /* ---------- Persistence ---------- */
@@ -309,7 +309,7 @@ let SESSION = DB.get('session', null);
 
 /* ---------- Reference data ---------- */
 const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
-const CARRIERS = ["Banner Life (Legal & General)","Protective","Corebridge (AIG)","Mutual of Omaha","Pacific Life","Prudential","Lincoln Financial","Transamerica","Nationwide","Northwestern Mutual","Penn Mutual","Symetra","John Hancock","Gerber Life","Foresters","Americo","American Amicable","SBLI","Ethos","Ladder","Haven Life (MassMutual)"];
+const CARRIERS = ["AAA Life","Aetna (CVS Health)","Aflac","Allianz Life","Allstate","American Amicable","American Equity","American Fidelity","American National (ANICO)","Americo","Ameritas","Assurity","Athene","Baltimore Life","Banner Life (Legal & General)","Bankers Life","Bestow","Brighthouse Financial","Cigna","Cincinnati Life","Colonial Penn","Columbian Financial Group","Corebridge Financial (AIG)","Equitable (AXA)","Ethos","F&G (Fidelity & Guaranty)","Fabric by Gerber","Farmers Insurance","Fidelity Life","Foresters Financial","GTL (Guarantee Trust Life)","Gerber Life","Globe Life","Great Western","Guardian Life","Haven Life (MassMutual)","Illinois Mutual","John Hancock","Kansas City Life","Knights of Columbus","Ladder","Liberty Bankers Life","Lincoln Financial","Manhattan Life","MassMutual","Midland National","Minnesota Life (Securian)","Modern Woodmen of America","Mutual of Omaha","Mutual Trust Life","National Life Group","Nationwide","New York Life","North American Company","Northwestern Mutual","Oxford Life","Pacific Life","Penn Mutual","Physicians Mutual","Primerica","Principal Financial","Prosperity Life","Protective","Prudential","Royal Neighbors of America","SBLI","Sagicor Life","Securian Financial","Sentry Life","Shenandoah Life","State Farm","Symetra","The Standard","Thrivent","Transamerica","TruStage (CMFG)","United Home Life","United of Omaha","USAA","Vantis Life","Wellabe (Medico)","William Penn","Woodmen Life","Zurich"];
 
 /* ---------- Lead scoring engine ----------
    Produces 0-100 Purchase-Intent Score + A/B/C/D tier + factor breakdown */
@@ -383,12 +383,18 @@ function recommend(a){
 
 /* ---------- Pricing engine ----------
    Price a lead from tier + type + freshness (real-market ranges) */
+/* Price = base(type) × intent tier × freshness. Benchmarked to 2025-26 vendors:
+   shared $10-25 | exclusive $30-75 | live-transfer $48-100 | aged $1-14 (older=cheaper) */
 function priceLead(L){
   const tier=L.score.tier;
-  if(L.type==="livetransfer") return ({A:195,B:160,C:130,D:95})[tier];
-  if(L.type==="exclusive")    return ({A:140,B:110,C:85,D:60})[tier];
-  if(L.type==="aged")         return ({A:13,B:10,C:7,D:5})[tier];
-  return ({A:38,B:30,C:24,D:18})[tier]; // shared
+  if(L.type==="livetransfer") return ({A:100,B:80,C:62,D:48})[tier];
+  if(L.type==="exclusive")    return ({A:75,B:58,C:42,D:30})[tier];
+  if(L.type==="aged"){
+    const base=({A:14,B:11,C:8,D:5})[tier];
+    const f=({fresh:1,d8_30:0.8,d31_90:0.55,d90:0.35})[freshKey(L)]??0.5;
+    return Math.max(1,Math.round(base*f));
+  }
+  return ({A:25,B:20,C:15,D:10})[tier]; // shared
 }
 
 /* ---------- Lead category engine (modeled on top vendors: GOAT, Badass, Redbird) ----------
@@ -572,21 +578,32 @@ views.home=()=>`
 </div></section>
 
 <section class="block" id="pricing"><div class="container">
-  <div class="section-head"><div class="eyebrow">Lead pricing</div><h2>Pay only for the leads you want</h2>
-  <p>Benchmarked against EverQuote, SmartFinancial, NextGen &amp; aged-lead vendors. Final price scales with the lead's intent tier (A–D).</p></div>
+  <div class="section-head"><div class="eyebrow">Lead pricing</div><h2>Fair, transparent lead pricing</h2>
+  <p>Benchmarked to the 2025–26 market (ActiveProspect, EverQuote, SmartFinancial, MADLeadFlow). Every price is built from three factors — see <a href="#pricing-how">how we price</a> below.</p></div>
   <div class="price-grid">
-    <div class="price-card"><h3>Aged</h3><div class="amt">$5<span>–13</span></div>
-      <ul><li>30–180 days old</li><li>High volume, low cost</li><li><b>Best for</b> dialers &amp; nurture</li><li>Shared history</li></ul>
-      <button class="btn btn-outline" style="width:100%" onclick="nav('signup')">Browse</button></div>
-    <div class="price-card pop"><div class="tag">MOST POPULAR</div><h3>Shared</h3><div class="amt">$18<span>–38</span></div>
+    <div class="price-card"><h3>Aged</h3><div class="amt">$1<span>–14</span></div>
+      <ul><li>8–180+ days old</li><li>High volume, lowest cost</li><li><b>Best for</b> dialers &amp; nurture</li><li>Older = cheaper</li></ul>
+      <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
+    <div class="price-card pop"><div class="tag">MOST POPULAR</div><h3>Shared</h3><div class="amt">$10<span>–25</span></div>
       <ul><li>Real-time, sold to 3–5 agents</li><li>Strong value per dollar</li><li><b>Best for</b> active producers</li><li>Full survey + score</li></ul>
-      <button class="btn btn-primary" style="width:100%" onclick="nav('signup')">Browse</button></div>
-    <div class="price-card"><h3>Exclusive</h3><div class="amt">$60<span>–140</span></div>
+      <button class="btn btn-primary" style="width:100%" onclick="startOnboard()">Browse</button></div>
+    <div class="price-card"><h3>Exclusive</h3><div class="amt">$30<span>–75</span></div>
       <ul><li>Sold to <b>you only</b></li><li>2–3× higher conversion</li><li><b>Best for</b> closers</li><li>Carrier match included</li></ul>
-      <button class="btn btn-outline" style="width:100%" onclick="nav('signup')">Browse</button></div>
-    <div class="price-card"><h3>Live Transfer</h3><div class="amt">$95<span>–195</span></div>
+      <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
+    <div class="price-card"><h3>Live Transfer</h3><div class="amt">$48<span>–100</span></div>
       <ul><li>Warm call, on the line now</li><li>Highest intent</li><li><b>Best for</b> phone closers</li><li>AI pre-qualified</li></ul>
-      <button class="btn btn-outline" style="width:100%" onclick="nav('signup')">Browse</button></div>
+      <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
+  </div>
+
+  <div id="pricing-how" class="card" style="max-width:900px;margin:30px auto 0">
+    <h3 style="font-size:19px;margin-bottom:6px"><i class="ph-duotone ph-calculator" style="color:var(--teal)"></i> How we price every lead</h3>
+    <p style="color:var(--muted);font-size:14.5px;margin-bottom:14px">A lead's price isn't arbitrary. It's calculated from three things, then benchmarked against what real vendors charge so you never overpay:</p>
+    <div class="grid-3" style="gap:16px">
+      <div><b>1 · Lead type</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How exclusive and how warm it is. A live transfer (a prospect on the phone right now) is worth far more than an aged shared lead. Type sets the base price: <b>Aged &lt; Shared &lt; Exclusive &lt; Live Transfer</b>.</p></div>
+      <div><b>2 · Intent tier (A–D)</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">Our 0–100 purchase-intent score. A <b>Tier A</b> lead (ready now, real budget, coverage gap) converts several times better than a Tier D, so it costs more. You're paying for likelihood-to-close, not just contact info.</p></div>
+      <div><b>3 · Freshness</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How long ago the survey was filled out. Fresh leads (0–7 days) carry full price; aged leads are discounted the older they get (down to ~35% at 90+ days) because response rates fall over time.</p></div>
+    </div>
+    <div class="note info" style="margin-top:14px"><b>The formula:</b> <code>price = base(type) × tier(A–D) × freshness</code>. Example: a Tier A exclusive lead is ~$75; the same profile as an aged 90+ day lead drops to a few dollars. <b>Why this way?</b> It ties every dollar you spend to expected ROI — you pay the most only for the leads most likely to become a written policy, and pay pennies for bulk aged leads to feed a dialer.</div>
   </div>
   <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:18px">Owner account is not charged per lead — it runs the AI sales engine that generates and works the pipeline.</p>
 </div></section>
@@ -649,7 +666,8 @@ views.signup=()=>`
     <div class="field"><label>States you are licensed in</label><div class="hint" style="margin-bottom:6px">Select all that apply.</div>
       <div class="checks" id="su_states">${STATES.map(s=>`<label><input type="checkbox" value="${s}" class="su_st"> ${s}</label>`).join("")}</div>
     </div>
-    <div class="field"><label>Carrier appointments</label><div class="hint" style="margin-bottom:6px">Which carriers are you appointed to write with?</div>
+    <div class="field"><label>Carrier appointments</label><div class="hint" style="margin-bottom:6px">Which carriers are you appointed to write with? (${CARRIERS.length} available — type to filter)</div>
+      <input oninput="filterList(this,'#su_carr')" placeholder="Search carriers…" style="width:100%;margin-bottom:6px;padding:9px 12px;border:1px solid var(--line);border-radius:9px">
       <div class="checks" id="su_carr">${CARRIERS.map(c=>`<label><input type="checkbox" value="${c}" class="su_ca"> ${c}</label>`).join("")}</div>
     </div>
     <label style="display:flex;gap:10px;align-items:flex-start;font-size:13.5px;margin:6px 0 16px"><input type="checkbox" id="su_attest" style="margin-top:3px"> <span>I certify that I hold an active resident insurance producer license, that the information above is accurate and current, and I authorize AnkaLife to verify it against the NIPR Producer Database.</span></label>
@@ -1431,8 +1449,9 @@ function profile(){
     </div>`}
     <div class="field"><label>States licensed</label>
       <div class="checks">${STATES.map(s=>`<label><input type="checkbox" class="pf_st" value="${s}" ${(u.states||[]).includes(s)?'checked':''}> ${s}</label>`).join("")}</div></div>
-    <div class="field"><label>Carrier appointments</label>
-      <div class="checks">${CARRIERS.map(c=>`<label><input type="checkbox" class="pf_ca" value="${c}" ${(u.carriers||[]).includes(c)?'checked':''}> ${c}</label>`).join("")}</div></div>
+    <div class="field"><label>Carrier appointments <span class="hint">(${CARRIERS.length} available — type to filter)</span></label>
+      <input oninput="filterList(this,'#pf_carr')" placeholder="Search carriers…" style="width:100%;margin-bottom:6px;padding:9px 12px;border:1px solid var(--line);border-radius:9px">
+      <div class="checks" id="pf_carr">${CARRIERS.map(c=>`<label><input type="checkbox" class="pf_ca" value="${c}" ${(u.carriers||[]).includes(c)?'checked':''}> ${c}</label>`).join("")}</div></div>
     <button class="btn btn-teal" onclick="saveProfile()">Save changes</button>
     ${u.status==="denied"?`<button class="btn btn-outline" style="margin-left:10px" onclick="rerunVerify()">Re-run license verification</button>`:''}
     <span id="pfMsg" style="margin-left:12px;color:var(--good);font-weight:600"></span>
@@ -1527,7 +1546,9 @@ views.onboard=()=>{
   if(s===2) body=`<h1 style="font-size:21px;margin-bottom:4px">Where & what you can write</h1>
     <p style="color:var(--muted);margin-bottom:14px">Leads are matched to what you can actually sell. You can change these anytime.</p>
     <div class="field"><label>States you're licensed in</label><div class="checks" id="ob_states">${STATES.map(x=>`<label><input type="checkbox" class="ob_st" value="${x}" ${a.states.includes(x)?'checked':''}> ${x}</label>`).join("")}</div></div>
-    <div class="field"><label>Carrier appointments</label><div class="checks" id="ob_carr">${CARRIERS.map(c=>`<label><input type="checkbox" class="ob_ca" value="${c}" ${a.carriers.includes(c)?'checked':''}> ${c}</label>`).join("")}</div></div>
+    <div class="field"><label>Carrier appointments <span class="hint">(${CARRIERS.length} available — type to filter)</span></label>
+      <input oninput="filterList(this,'#ob_carr')" placeholder="Search carriers…" style="width:100%;margin-bottom:6px;padding:9px 12px;border:1px solid var(--line);border-radius:9px">
+      <div class="checks" id="ob_carr">${CARRIERS.map(c=>`<label><input type="checkbox" class="ob_ca" value="${c}" ${a.carriers.includes(c)?'checked':''}> ${c}</label>`).join("")}</div></div>
     <label style="display:flex;gap:10px;align-items:flex-start;font-size:13.5px;margin-top:8px"><input type="checkbox" id="ob_attest" ${a.attest?'checked':''}> <span>I certify my information is accurate and current and authorize verification against the NIPR Producer Database.</span></label>`;
   if(s===3){ const v=OB.result; body=`<h1 style="font-size:21px;margin-bottom:10px">Automated verification</h1>
     ${v? (v.approved?`<div class="alert ok"><b>✅ Approved</b> — your license cleared the automated ${v.source} check.</div>`
@@ -1842,6 +1863,7 @@ function closeModal(){ document.getElementById('modal-root').innerHTML=""; }
 
 /* ---------- utils ---------- */
 function val(id){const e=document.getElementById(id);return e?e.value.trim():""}
+function filterList(inp,sel){const q=inp.value.toLowerCase();document.querySelectorAll(sel+' label').forEach(l=>{l.style.display=l.textContent.toLowerCase().includes(q)?'':'none';});}
 
 /* ---------- boot ---------- */
 (function captureRef(){
