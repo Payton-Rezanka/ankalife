@@ -262,7 +262,9 @@ footer.ft a{color:#cfe0e6}
 .opt.sel .rad{border-color:var(--teal);background:var(--teal);box-shadow:inset 0 0 0 3px #fff}
 /* live social-proof toasts (bottom-right) */
 #toast-wrap{position:fixed;right:18px;bottom:18px;z-index:400;display:flex;flex-direction:column;gap:10px;max-width:340px}
-.toast{background:#fff;border:1px solid var(--line);border-left:4px solid var(--good);border-radius:12px;padding:12px 14px;box-shadow:0 14px 34px -10px rgba(8,42,43,.35);font-size:13.5px;opacity:0;transform:translateY(12px);transition:opacity .3s,transform .3s}
+.toast{position:relative;background:#fff;border:1px solid var(--line);border-left:4px solid var(--good);border-radius:12px;padding:12px 32px 12px 14px;box-shadow:0 14px 34px -10px rgba(8,42,43,.35);font-size:13.5px;opacity:0;transform:translateY(12px);transition:opacity .3s,transform .3s}
+.toast-x{position:absolute;top:5px;right:7px;width:22px;height:22px;border:none;background:transparent;color:var(--muted);font-size:19px;line-height:1;cursor:pointer;border-radius:6px;display:grid;place-items:center}
+.toast-x:hover{background:var(--sand);color:var(--ink)}
 .toast.show{opacity:1;transform:none}
 .toast b{color:var(--ink)}
 .toast .tmeta{color:var(--muted);font-size:12px;margin-top:2px}
@@ -317,7 +319,7 @@ footer.ft a{color:#cfe0e6}
    ANKALIFE — AI Life Insurance Lead Platform (demo build)
    Single-file front-end. Data persists in localStorage.
    Pricing benchmarks from real lead vendors (2025-26, recalibrated to mainstream):
-   shared $10-25 | exclusive $30-75 | live-transfer $48-100 | aged $1-14
+   exclusive $30-75 | aged $1-14 (older=cheaper) — all leads exclusive, no shared/live-transfer
    ============================================================ */
 
 /* ---------- Persistence ---------- */
@@ -440,7 +442,7 @@ function recommend(a){
   if(wealthy && (a.trigger==="business"||bigNeed)){
     push("Penn Mutual","Indexed Universal Life (IUL)","Cash-value accumulation + tax-advantaged growth for high-income clients and business planning.");
     push("Northwestern Mutual","Whole Life (participating)","Premium dividends and lifetime guarantees for legacy/estate-oriented buyers.");
-    push("Nationwide","IUL / Survivorship","Flexible cash-value design, strong for estate & key-person coverage.");
+    push("Nationwide","IUL / Survivorship","Flexible cash-value design, strong for estate &amp; legacy coverage.");
   }
   if(a.trigger==="mortgage"||a.trigger==="newbaby"||a.trigger==="marriage"||a.trigger==="debt"){
     push("Banner Life (Legal & General)","Level Term (10-30 yr)","Lowest-cost term for income replacement / mortgage protection; competitive for healthy applicants.");
@@ -462,10 +464,9 @@ function recommend(a){
 /* ---------- Pricing engine ----------
    Price a lead from tier + type + freshness (real-market ranges) */
 /* Price = base(type) × intent tier × freshness. Benchmarked to 2025-26 vendors:
-   shared $10-25 | exclusive $30-75 | live-transfer $48-100 | aged $1-14 (older=cheaper) */
+   exclusive $30-75 | aged $1-14 (older=cheaper) — all leads exclusive, no shared/live-transfer (older=cheaper) */
 function priceLead(L){
   const tier=L.score.tier;
-  if(L.type==="livetransfer") return ({A:100,B:80,C:62,D:48})[tier];
   if(L.type==="exclusive")    return ({A:75,B:58,C:42,D:30})[tier];
   if(L.type==="aged"){
     const base=({A:14,B:11,C:8,D:5})[tier];
@@ -477,13 +478,12 @@ function priceLead(L){
 
 /* ---------- Lead category engine (modeled on top vendors: GOAT, Badass, Redbird) ----------
    Funnels each consumer into a sellable vertical based on their answers. */
-const CATEGORIES=["Veteran","Final Expense","Mortgage Protection","Term Life","IUL / Wealth","Senior / Medicare","Business / Key-Person"];
+const CATEGORIES=["Veteran","Final Expense","Mortgage Protection","Term Life","IUL / Wealth","Senior / Medicare"];
 function categorize(a){
   const age=+a.age||40;
   // 1) Hard overrides — these define the vertical regardless of product preference
   if(a.military && a.military!=="no") return "Veteran";
   if(a.trigger==="mortgage" || a.productType==="mortgage") return "Mortgage Protection";
-  if(a.trigger==="business") return "Business / Key-Person";
   // 2) Explicit product choice the client made (when they told us)
   if(a.productType==="whole" || a.trigger==="finalexpense") return (age>=60?"Final Expense":"Final Expense");
   if(a.productType==="iul") return "IUL / Wealth";
@@ -494,7 +494,7 @@ function categorize(a){
   if((a.income==="150k+"||a.income==="100-150k") && (a.coverage==="200k+"||a.coverage==="100-200k")) return "IUL / Wealth";
   return "Term Life";
 }
-const CAT_ICON={"Veteran":"ph-medal","Final Expense":"ph-flower-lotus","Mortgage Protection":"ph-house-line","Term Life":"ph-umbrella","IUL / Wealth":"ph-trend-up","Senior / Medicare":"ph-first-aid-kit","Business / Key-Person":"ph-briefcase"};
+const CAT_ICON={"Veteran":"ph-medal","Final Expense":"ph-flower-lotus","Mortgage Protection":"ph-house-line","Term Life":"ph-umbrella","IUL / Wealth":"ph-trend-up","Senior / Medicare":"ph-first-aid-kit"};
 /* Freshness buckets (real vendors price by age: fresh real-time -> 12mo aged) */
 const FRESH_BUCKETS=[["fresh","Fresh (0–7 days)",0,7],["d8_30","Aged 8–30 days",8,30],["d31_90","Aged 31–90 days",31,90],["d90","Aged 90+ days",91,9999]];
 function leadDays(l){ return l.daysAgo!=null ? l.daysAgo : Math.floor((Date.now()-(l.createdAt||Date.now()))/86400000); }
@@ -535,7 +535,7 @@ const FIRST=["James","Maria","Robert","Latisha","David","Jennifer","Carlos","Sus
 const LAST=["Carter","Nguyen","Johnson","Brooks","Patel","Reyes","Thompson","Walker","Morales","Bennett","Foster","Coleman","Rivera","Hughes","Sanders","Price","Ward","Diaz","Khan","Bell","Murphy","Castillo","Watson","Hayes","Long","Ramos","Cole","Fisher","Powell","Greer"];
 function rnd(arr){return arr[Math.floor(Math.random()*arr.length)]}
 function seedLeads(){
-  const types=["exclusive","exclusive","exclusive","exclusive","livetransfer","aged","aged"];
+  const types=["exclusive","exclusive","exclusive","exclusive","aged","aged"];
   const tf=["asap","30days","90days:","researching"];
   const cov=["5-10k","10-20k","20-35k","35-50k","50-100k","100-200k","200k+"];
   const trig=["newbaby","mortgage","marriage","business","debt","none"];
@@ -686,7 +686,7 @@ views.home=()=>`
     ${[
       ["ph-gauge","Purchase-intent scoring","Every lead gets a transparent A–D score so you spend your time (and money) on the hottest prospects first."],
       ["ph-shield-check","Automated license checks","Get verified against the NIPR Producer Database automatically — approved or denied with a clear reason. No manual review."],
-      ["ph-tag","Fair, real-market pricing","Every lead is exclusive to you — never shared. Tiered pricing (exclusive, live-transfer, aged) by intent and freshness."],
+      ["ph-tag","Fair, real-market pricing","Every lead is exclusive to you — never shared. Tiered pricing (exclusive &amp; aged) by intent and freshness. Buy and call on your own time."],
       ["ph-handshake","Carrier matching","1–3 best-fit carriers recommended per lead, from final expense to term to IUL — so you quote faster."],
       ["ph-funnel","Filter &amp; bulk-buy","Filter by category, freshness, tier, state and price — then buy one lead or a hundred in a single click."],
       ["ph-seal-check","Consent-verified","Every lead opted in through our survey with documented TCPA consent — real people who asked to hear from an agent."]
@@ -701,9 +701,6 @@ views.home=()=>`
     <div class="price-card pop"><div class="tag">EXCLUSIVE TO YOU</div><h3>Exclusive</h3><div class="amt">$30<span>–75</span></div>
       <ul><li>Real-time, sold to <b>you only</b></li><li>Never shared with other agents</li><li><b>Best for</b> closers</li><li>Full survey + score + carrier match</li></ul>
       <button class="btn btn-primary" style="width:100%" onclick="startOnboard()">Browse</button></div>
-    <div class="price-card"><h3>Live Transfer</h3><div class="amt">$48<span>–100</span></div>
-      <ul><li>Warm call, on the line now</li><li>Highest intent · exclusive</li><li><b>Best for</b> phone closers</li><li>AI pre-qualified</li></ul>
-      <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
     <div class="price-card"><h3>Aged</h3><div class="amt">$1<span>–14</span></div>
       <ul><li>8–180+ days old · still exclusive</li><li>High volume, lowest cost</li><li><b>Best for</b> dialers &amp; nurture</li><li>Older = cheaper</li></ul>
       <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
@@ -713,7 +710,7 @@ views.home=()=>`
     <h3 style="font-size:19px;margin-bottom:6px"><i class="ph-duotone ph-calculator" style="color:var(--teal)"></i> How we price every lead</h3>
     <p style="color:var(--muted);font-size:14.5px;margin-bottom:14px">A lead's price isn't arbitrary. It's calculated from three things, then benchmarked against what real vendors charge so you never overpay:</p>
     <div class="grid-3" style="gap:16px">
-      <div><b>1 · Lead type</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How warm it is. Every lead is <b>exclusive to the agent who buys it</b> — never shared. A live transfer (a prospect on the phone right now) is worth more than an aged one. Type sets the base price: <b>Aged &lt; Exclusive &lt; Live Transfer</b>.</p></div>
+      <div><b>1 · Lead type</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How warm it is. Every lead is <b>exclusive to the agent who buys it</b> — never shared. A fresh exclusive lead is worth more than an older aged one. Type sets the base price: <b>Aged &lt; Exclusive</b>. Buy a lead, then call it on your own time — there's no live-transfer/inbound system.</p></div>
       <div><b>2 · Intent tier (A–D)</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">Our 0–100 purchase-intent score. A <b>Tier A</b> lead (ready now, real budget, coverage gap) converts several times better than a Tier D, so it costs more. You're paying for likelihood-to-close, not just contact info.</p></div>
       <div><b>3 · Freshness</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How long ago the survey was filled out. Fresh leads (0–7 days) carry full price; aged leads are discounted the older they get (down to ~35% at 90+ days) because response rates fall over time.</p></div>
     </div>
@@ -797,7 +794,7 @@ const SVQ=[
   {k:"productType",t:"What type of life insurance are you looking for?",h:"Not sure? That's completely fine — your agent will recommend the best fit.",o:[["term","Term life (lower cost, set period)"],["whole","Whole life / final expense (lifetime, builds value)"],["iul","Universal / IUL (flexible, cash value)"],["mortgage","Mortgage protection"],["dontknow","I'm not sure / I don't know"]]},
   {k:"who",t:"Who is this coverage for?",h:"",o:[["self","Myself"],["spouse","My spouse / partner"],["child","A child or grandchild"],["parent","A parent"],["family","My whole family"],["other","Someone else"]]},
   {k:"dependents",t:"How many people depend on your income?",h:"This helps size the right coverage.",o:[["0","Just me"],["1","1 person"],["2","2 people"],["3+","3 or more"]]},
-  {k:"trigger",t:"What's prompting you to look now?",h:"This helps us match the right policy.",o:[["newbaby","New baby / growing family"],["mortgage","Mortgage / home"],["marriage","Marriage / partner"],["finalexpense","Cover funeral / final expenses"],["business","Business or key-person need"],["debt","Debt / income protection"],["none","No specific reason"]]},
+  {k:"trigger",t:"What's prompting you to look now?",h:"This helps us match the right policy.",o:[["newbaby","New baby / growing family"],["mortgage","Mortgage / home"],["marriage","Marriage / partner"],["finalexpense","Cover funeral / final expenses"],["debt","Debt / income protection"],["none","No specific reason"]]},
   {k:"military",t:"Have you or your spouse served in the U.S. military?",h:"Veterans and families may qualify for special programs.",o:[["me","Yes — I served"],["spouse","Yes — my spouse served"],["no","No"]]},
   {k:"branch",t:"Thank you for your service. Which branch?",h:"",o:[["army","Army"],["navy","Navy"],["airforce","Air Force"],["marines","Marines"],["coastguard","Coast Guard"],["space","Space Force"]],when:a=>a.military&&a.military!=="no"},
   {k:"age",t:"What's your age?",h:"Rates are based largely on age.",type:"number"},
@@ -1003,7 +1000,7 @@ function availableLeads(){
 }
 
 /* ---------- Buying preferences / auto-match ---------- */
-function getPrefs(){ return SESSION.prefs || {tiers:['A','B','C','D'],types:['exclusive','shared','livetransfer','aged'],maxPrice:null,statesOnly:true}; }
+function getPrefs(){ return SESSION.prefs || {tiers:['A','B','C','D'],types:['exclusive','aged'],maxPrice:null,statesOnly:true}; }
 function matchedLeads(){
   const p=getPrefs(), states=SESSION.states||[];
   return availableLeads().filter(l=>{
@@ -1019,7 +1016,7 @@ function editPrefs(){
   modal("Lead preferences",`
     <p style="color:var(--muted);margin-bottom:14px">New leads matching these are auto-surfaced on your dashboard. Matches are always limited to states you're licensed in (set those in <a onclick="closeModal();nav('profile')">My Profile</a>).</p>
     <div class="field"><label>Intent tiers</label><div style="display:flex;gap:16px;flex-wrap:wrap">${['A','B','C','D'].map(t=>`<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" class="pr_tier" value="${t}" ${p.tiers.includes(t)?'checked':''}> Tier ${t}</label>`).join("")}</div></div>
-    <div class="field"><label>Lead types</label><div style="display:flex;gap:16px;flex-wrap:wrap">${[['exclusive','Exclusive'],['livetransfer','Live transfer'],['aged','Aged']].map(t=>`<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" class="pr_type" value="${t[0]}" ${p.types.includes(t[0])?'checked':''}> ${t[1]}</label>`).join("")}</div></div>
+    <div class="field"><label>Lead types</label><div style="display:flex;gap:16px;flex-wrap:wrap">${[['exclusive','Exclusive'],['aged','Aged']].map(t=>`<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" class="pr_type" value="${t[0]}" ${p.types.includes(t[0])?'checked':''}> ${t[1]}</label>`).join("")}</div></div>
     <div class="field"><label>Max price per lead</label><input id="pr_max" type="number" value="${p.maxPrice||''}" placeholder="No limit"></div>
     <button class="btn btn-teal" style="width:100%" onclick="savePrefs()">Save preferences</button>
   `);
@@ -1052,7 +1049,6 @@ function marketplace(){
   <div class="toolbar">
     <select onchange="setFilter('cat',this.value)" title="Lead category"><option value="">All categories</option>${CATEGORIES.map(c=>`<option ${MFILTER.cat===c?'selected':''}>${c}</option>`).join("")}</select>
     <select onchange="setFilter('type',this.value)" title="Delivery type"><option value="">All types</option>
-      <option value="livetransfer" ${MFILTER.type==='livetransfer'?'selected':''}>Live transfer</option>
       <option value="exclusive" ${MFILTER.type==='exclusive'?'selected':''}>Exclusive</option>
       <option value="aged" ${MFILTER.type==='aged'?'selected':''}>Aged</option></select>
     <select onchange="setFilter('fresh',this.value)" title="How long ago the survey was filled out"><option value="">All ages (freshness)</option>${FRESH_BUCKETS.map(b=>`<option value="${b[0]}" ${MFILTER.fresh===b[0]?'selected':''}>${b[1]}</option>`).join("")}</select>
@@ -1099,7 +1095,7 @@ function bulkBuyConfirm(n){
   closeModal(); nav('myleads');
 }
 function leadCard(l,owned){
-  const labelType={livetransfer:"Live Transfer",exclusive:"Exclusive",shared:"Exclusive",aged:"Aged "+l.daysAgo+"d"}[l.type];
+  const labelType={livetransfer:"Exclusive",exclusive:"Exclusive",shared:"Exclusive",aged:"Aged "+l.daysAgo+"d"}[l.type];
   return `<div class="lead-card" onclick="openLead('${l.id}',${owned})">
     <div class="lead-top">
       <div><div class="lead-name">${owned?l.first+" "+l.last:l.first+" "+l.last[0]+"."}</div>
@@ -1715,7 +1711,7 @@ function ensureDemoAgent(){
       licenseState:'TX',lineLife:true,states:['TX','FL','CA','GA','NY','AZ','NC','OH'],
       carriers:CARRIERS.slice(0,6),status:'approved',balance:500,
       transactions:[{id:'T0',type:'deposit',amt:500,desc:'Welcome demo credit',at:Date.now(),bal:500}],
-      purchased:[],prefs:{tiers:['A','B'],types:['exclusive','shared','livetransfer','aged'],maxPrice:null,statesOnly:true}});
+      purchased:[],prefs:{tiers:['A','B'],types:['exclusive','aged'],maxPrice:null,statesOnly:true}});
     saveAccounts(a);
   }
   return findAccount('agent@ankalife.ai');
@@ -2175,9 +2171,12 @@ function closeModal(){ document.getElementById('modal-root').innerHTML=""; }
    ============================================================ */
 function toastWrap(){ let w=document.getElementById('toast-wrap'); if(!w){ w=document.createElement('div'); w.id='toast-wrap'; document.body.appendChild(w); } return w; }
 function showToast(html,ms=5000){
-  const t=document.createElement('div'); t.className='toast'; t.innerHTML=html;
+  const t=document.createElement('div'); t.className='toast';
+  t.innerHTML='<button class="toast-x" aria-label="Dismiss">×</button>'+html;
   toastWrap().appendChild(t); requestAnimationFrame(()=>t.classList.add('show'));
-  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),320); }, ms);
+  const close=()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),320); };
+  const timer=setTimeout(close, ms);
+  t.querySelector('.toast-x').onclick=()=>{ clearTimeout(timer); close(); };
 }
 function placements(){ return DB.get('placements',[]); }
 function placementToast(p){
