@@ -347,14 +347,27 @@ function mapCloudLead(r){
     consent:{given:r.consent_given===true||r.consent_given==='true'}, source:'Web opt-in (cloud)',
     status:r.status||'new', createdAt:r.created_at?new Date(r.created_at).getTime():Date.now() };
 }
-/* Pull shared leads from the cloud and merge them into the in-memory list */
+/* Map a FULL cloud row (owner only, RLS-gated) to the app's lead shape */
+function mapFullLead(r){
+  return { id:'C'+r.id, cloudId:r.id, cloud:true,
+    first:r.first||'New', last:r.last||'Prospect', state:r.state, zip:r.zip, city:'—',
+    phone:r.phone||'—', email:r.email||'—',
+    a:r.answers||{}, score:{tier:r.tier, score:r.score, factors:r.factors||[]}, recs:r.recs||[],
+    category:r.category, type:r.type||'shared', daysAgo:r.days_ago||0, price:r.price||0,
+    consent:r.consent||{given:false}, source:r.source||'Web opt-in (cloud)',
+    status:r.status||'new', createdAt:r.created_at?new Date(r.created_at).getTime():Date.now() };
+}
+/* Pull shared leads from the cloud and merge them into the in-memory list.
+   Owner gets full rows (RLS-gated); agents/visitors get the masked view. */
 async function loadCloudLeads(){
   if(!sb) return;
+  const owner = SESSION && SESSION.role==='owner';
   try{
-    const { data, error } = await sb.from('leads_market').select('*').order('created_at',{ascending:false}).limit(500);
+    const { data, error } = await sb.from(owner?'leads':'leads_market').select('*').order('created_at',{ascending:false}).limit(500);
     if(error){ console.warn('cloud read', error); return; }
-    CLOUD_LEADS = (data||[]).map(mapCloudLead);
-    // merge into LEADS (dedupe by id), keeping local demo leads too
+    CLOUD_LEADS = (data||[]).map(owner?mapFullLead:mapCloudLead);
+    // drop any previously-merged cloud rows, then re-merge fresh
+    LEADS = LEADS.filter(l=>!l.cloud);
     const ids=new Set(LEADS.map(l=>l.id));
     CLOUD_LEADS.forEach(cl=>{ if(!ids.has(cl.id)) LEADS.unshift(cl); });
     const r=DB.get('route','home'); if(['marketplace','submissions','dashboard'].includes(r)) render(r);
@@ -712,20 +725,17 @@ function footer(){return `<footer class="ft"><div style="max-width:1000px;margin
 views.login=()=>`
 <div class="container" style="max-width:460px">
   <div class="form-card">
-    <h1 style="font-size:24px;margin-bottom:4px">Welcome back</h1>
-    <p style="color:var(--muted);margin-bottom:20px">Log in to your AnkaLife portal.</p>
+    <h1 style="font-size:24px;margin-bottom:4px">Log in or sign up</h1>
+    <p style="color:var(--muted);margin-bottom:20px">Enter your email and we'll send a secure one-tap login link — no password to remember.</p>
     <div id="loginErr"></div>
     <div class="field"><label>Email</label><input id="li_email" type="email" placeholder="you@agency.com"></div>
-    <div class="field"><label>Password</label><input id="li_pass" type="password" placeholder="••••••••"></div>
-    <button class="btn btn-teal" style="width:100%" onclick="doLogin()">Log in</button>
-    <div style="display:flex;align-items:center;gap:12px;margin:16px 0;color:var(--muted);font-size:13px"><span style="flex:1;height:1px;background:var(--line)"></span>or<span style="flex:1;height:1px;background:var(--line)"></span></div>
-    <button class="btn btn-outline" style="width:100%" onclick="sendMagicLink()"><i class="ph ph-envelope-simple"></i> Email me a magic link (no password)</button>
+    <button class="btn btn-teal" style="width:100%" onclick="sendMagicLink()"><i class="ph ph-envelope-simple"></i> Email me a secure login link</button>
     <div id="magicMsg"></div>
-    <p style="text-align:center;margin-top:16px;font-size:14px;color:var(--muted)">No account? <a onclick="nav('signup')">Sign up as an agent</a></p>
+    <p style="text-align:center;margin-top:16px;font-size:13.5px;color:var(--muted)">New agent? Use the same email above — you'll set up your license right after you log in.</p>
     <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
-      <p style="font-size:11.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:800;margin-bottom:10px">One-tap demo — agent side</p>
-      <button class="btn btn-outline" style="width:100%" onclick="oneTap('agent')"><i class="ph-bold ph-user"></i> Enter Demo Agent Portal</button>
-      <p style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center">The owner portal (AI Sales Engine) is private — sign in with your owner credentials above.</p>
+      <p style="font-size:11.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:800;margin-bottom:10px">Just exploring? Local demo (no account)</p>
+      <button class="btn btn-outline" style="width:100%" onclick="oneTap('agent')"><i class="ph-bold ph-user"></i> Open Demo Agent Portal</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:10px;text-align:center">Demo data only, saved to this device. Use the email link above for a real account.</p>
     </div>
   </div>
 </div>`;
@@ -1563,7 +1573,45 @@ function doLogin(){
   SESSION=acc; DB.set('session',acc);
   nav(acc.role==="owner"?"aicalls":"dashboard");
 }
-function logout(){ SESSION=null; DB.set('session',null); nav('home'); }
+function logout(){ if(sb && SESSION && SESSION.sbUser){ sb.auth.signOut().then(()=>{}); } SESSION=null; DB.set('session',null); nav('home'); }
+
+/* ============================================================
+   SUPABASE AUTH — real logins via magic link
+   ============================================================ */
+async function sbLoadProfile(user){
+  let prof=null;
+  try{ const {data}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle(); prof=data; }catch(e){}
+  const ud=DB.get('ud_'+user.id, {balance:0,purchased:[],transactions:[],prefs:null});
+  SESSION={
+    id:user.id, sbUser:true, email:user.email,
+    role: (prof&&prof.role)||'agent', status:(prof&&prof.status)||'pending',
+    name:(prof&&prof.name)||user.email.split('@')[0], agency:(prof&&prof.agency)||'',
+    npn:(prof&&prof.npn)||'', licenseState:(prof&&prof.license_state)||'', lineLife: prof?prof.line_life!==false:true,
+    states:(prof&&prof.states)||[], carriers:(prof&&prof.carriers)||[], denyReasons:(prof&&prof.deny_reasons)||[],
+    balance:ud.balance||0, purchased:ud.purchased||[], transactions:ud.transactions||[],
+    prefs:ud.prefs||((prof&&prof.prefs&&Object.keys(prof.prefs).length)?prof.prefs:null)
+  };
+  DB.set('session',SESSION);
+  return SESSION;
+}
+let AUTH_READY=false;
+async function initAuth(){
+  if(!sb) return;
+  sb.auth.onAuthStateChange(async (event, session)=>{
+    if(event==='SIGNED_IN' && session && session.user){
+      await sbLoadProfile(session.user);
+      loadCloudLeads();
+      if(SESSION.role==='owner'){ nav('aicalls'); }
+      else if(SESSION.status!=='approved'){ OB={step:0,a:{email:SESSION.email,name:SESSION.name,states:SESSION.states||[],carriers:SESSION.carriers||[]}}; nav('onboard'); }
+      else { nav('dashboard'); }
+    } else if(event==='SIGNED_OUT'){ if(SESSION&&SESSION.sbUser){ SESSION=null; DB.set('session',null); nav('home'); } }
+  });
+  try{
+    const {data}=await sb.auth.getSession();
+    if(data && data.session && data.session.user){ await sbLoadProfile(data.session.user); loadCloudLeads(); render(DB.get('route','home')); }
+  }catch(e){}
+  AUTH_READY=true;
+}
 
 /* ---------- One-tap demo access ---------- */
 function ensureDemoAgent(){
@@ -1588,17 +1636,23 @@ function oneTap(role){
 /* ---------- Magic-link (passwordless) login — simulated ----------
    In production: Supabase Auth / Resend emails a one-time signed link.
    Here we simulate the email + click so you can experience the flow. */
-function sendMagicLink(){
+async function sendMagicLink(){
   const email=val('li_email'); const box=document.getElementById('magicMsg');
-  if(!email){ box.innerHTML=`<div class="alert bad">Enter your email first, then request a link.</div>`; return; }
-  const acc=findAccount(email);
+  if(!email||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ box.innerHTML=`<div class="alert bad">Enter a valid email first, then request a link.</div>`; return; }
+  if(sb){
+    box.innerHTML=`<div class="note info">Sending your secure link…</div>`;
+    const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: location.origin+location.pathname } });
+    if(error){ box.innerHTML=`<div class="alert bad">${error.message}</div>`; return; }
+    box.innerHTML=`<div class="alert ok" style="text-align:left">
+      <b><i class="ph ph-envelope-simple-open"></i> Check your email</b>
+      <p style="margin:6px 0 0;font-size:13.5px">We sent a secure sign-in link to <b>${email}</b>. Click it on this device to log in — no password needed. (Check spam if you don't see it in a minute.)</p></div>`;
+    return;
+  }
+  // fallback (no backend configured) — simulated
   const token="ml_"+Math.random().toString(36).slice(2,10);
   DB.set('magic_'+email.toLowerCase(), {token, at:Date.now()});
-  box.innerHTML=`<div class="alert ok" style="text-align:left">
-    <b><i class="ph ph-envelope-simple-open"></i> Magic link "sent" to ${email}</b>
-    <p style="margin:6px 0 10px;font-size:13.5px">In production this is a real email. For the demo, click your link below — it expires in 10 minutes and logs you in with no password.</p>
-    <button class="btn btn-teal btn-sm" onclick="useMagicLink('${email}','${token}')"><i class="ph ph-link"></i> Open my magic link${acc?"":" (creates account)"}</button>
-  </div>`;
+  box.innerHTML=`<div class="alert ok" style="text-align:left"><b>Magic link "sent" to ${email}</b>
+    <button class="btn btn-teal btn-sm" style="margin-top:8px" onclick="useMagicLink('${email}','${token}')">Open my magic link</button></div>`;
 }
 function useMagicLink(email,token){
   const rec=DB.get('magic_'+email.toLowerCase(),null);
@@ -1675,6 +1729,16 @@ function obBack(){ obCollect(); if(OB.step>0)OB.step--; render('onboard'); }
 function obVerify(){ const a=OB.a; OB.result=verifyLicense(a); render('onboard'); }
 function obFinish(){
   const a=OB.a, v=OB.result||verifyLicense(a);
+  // Real (Supabase) user: update their cloud profile
+  if(SESSION && SESSION.sbUser){
+    SESSION.name=a.name||SESSION.name; SESSION.agency=a.agency||''; SESSION.npn=a.npn;
+    SESSION.licenseState=a.licenseState; SESSION.lineLife=a.lineLife;
+    SESSION.states=a.states; SESSION.carriers=a.carriers;
+    SESSION.status=v.approved?"approved":"denied"; SESSION.denyReasons=v.reasons;
+    persistSession(); OB={step:0,a:{states:[],carriers:[]}};
+    nav(v.approved?"dashboard":"profile"); return;
+  }
+  // Local demo user
   let acc=findAccount(a.email);
   const data={ role:"agent", name:a.name, agency:a.agency, email:a.email, password:a.password||"",
     npn:a.npn, licenseNumber:a.licenseNumber, licenseState:a.licenseState, lineLife:a.lineLife,
@@ -1805,6 +1869,13 @@ function confirmBuy(id){
   closeModal(); nav('myleads');
 }
 function persistSession(){
+  if(SESSION && SESSION.sbUser){
+    // transactional data stays local per-user for now (purchases/wallet move to cloud next phase)
+    DB.set('ud_'+SESSION.id,{balance:SESSION.balance,purchased:SESSION.purchased,transactions:SESSION.transactions,prefs:SESSION.prefs});
+    DB.set('session',SESSION);
+    if(sb){ sb.from('profiles').update({name:SESSION.name,npn:SESSION.npn,license_state:SESSION.licenseState,line_life:SESSION.lineLife!==false,states:SESSION.states,carriers:SESSION.carriers,status:SESSION.status,deny_reasons:SESSION.denyReasons||[],prefs:SESSION.prefs||{}}).eq('id',SESSION.id).then(()=>{},()=>{}); }
+    return;
+  }
   const all=accounts(); const i=all.findIndex(a=>a.id===SESSION.id);
   if(i>=0){ all[i]=SESSION; saveAccounts(all); } DB.set('session',SESSION);
 }
@@ -2057,6 +2128,7 @@ render(DB.get('route','home'));
 seedPlacements();
 startSocialProof();
 loadCloudLeads();   // pull shared leads from Supabase and merge in
+initAuth();         // restore Supabase session + handle magic-link sign-in
 
 /* ---------- PWA: service worker + install ---------- */
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
