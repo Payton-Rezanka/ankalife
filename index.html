@@ -1896,9 +1896,10 @@ function submitPolicy(id){
   const l=p?.snapshot||LEADS.find(x=>x.id===id);
   if(p){ p.status='sold'; p.policy={carrier,product,face,ap,monthly:mo,num,at:Date.now()}; persistSession(); }
   const gl=LEADS.find(x=>x.id===id); if(gl){ gl.status='sold'; DB.set('leads',LEADS); }
-  addPlacement({state:l?l.state:'US', carrier, face, category:l?(l.category||categorize(l.a)):'life', ap});
+  const freshTag = l ? (freshKey(l)==='fresh'?'Fresh':'Aged') : 'Fresh';
+  addPlacement({state:l?l.state:'US', carrier, face, category:l?(l.category||categorize(l.a)):'life', freshTag, ap});
   closeModal();
-  showToast(`<div><i class="ph-bold ph-confetti tic" style="color:var(--gold)"></i><b>Nice work — policy logged!</b></div><div class="tmeta">${face} with ${carrier}${ap?` · $${ap}/yr AP`:''}. Added to your book.</div>`,5000);
+  showToast(`<div><i class="ph-bold ph-confetti tic" style="color:var(--gold)"></i><b>Nice work — policy logged!</b></div><div class="tmeta">${face} with ${carrier}${ap?` · <b>$${(+ap).toLocaleString()}/yr AP</b>`:''} · ${freshTag} ${l?(l.category||categorize(l.a)):''} lead. Added to your book.</div>`,8000);
   render(DB.get('route','myleads'));
 }
 function requestCredit(id){
@@ -1966,8 +1967,10 @@ function showToast(html,ms=5000){
 }
 function placements(){ return DB.get('placements',[]); }
 function placementToast(p){
+  const kind=`${p.freshTag||'Fresh'} ${p.category||'life'}`.trim();
+  const ap=p.ap?`<b>$${(+p.ap).toLocaleString()}/yr</b> AP `:'';
   showToast(`<div><i class="ph-bold ph-seal-check tic"></i><b>Policy placed!</b></div>
-    <div class="tmeta">An agent in <b>${p.state}</b> just wrote a <b>${p.face}</b> ${p.category||'life'} policy with <b>${p.carrier}</b>.</div>`);
+    <div class="tmeta">An agent in <b>${p.state}</b> just placed a ${ap}policy with <b>${p.carrier}</b><br><span style="color:var(--teal);font-weight:600">${kind} lead</span></div>`, 8000);
 }
 function addPlacement(p){
   const arr=placements(); arr.unshift(p); DB.set('placements',arr.slice(0,60));
@@ -1979,8 +1982,8 @@ window.addEventListener('storage',e=>{ if(e.key==='anka_place_ping' && e.newValu
 /* seed a few sample placements so visitors see live activity */
 function seedPlacements(){
   if(placements().length) return;
-  const S=["TX","FL","GA","OH","NC","AZ","PA","CA","MI","TN"], C=["Mutual of Omaha","Americo","American Amicable","Corebridge Financial (AIG)","Foresters Financial","Transamerica","Gerber Life","Banner Life (Legal & General)"], F=["$10–20k","$20–35k","$35–50k","$50–100k","$100–200k"], K=["Final Expense","Term Life","Mortgage Protection","Veteran","Senior / Medicare"];
-  const arr=[]; for(let i=0;i<24;i++){ arr.push({state:rnd(S),carrier:rnd(C),face:rnd(F),category:rnd(K),seed:true}); }
+  const S=["TX","FL","GA","OH","NC","AZ","PA","CA","MI","TN"], C=["Mutual of Omaha","Americo","American Amicable","Corebridge Financial (AIG)","Foresters Financial","Transamerica","Gerber Life","Banner Life (Legal & General)"], K=["Final Expense","Term Life","Mortgage Protection","Veteran","Senior / Medicare"], FR=["Fresh","Aged","Aged"];
+  const arr=[]; for(let i=0;i<24;i++){ arr.push({state:rnd(S),carrier:rnd(C),category:rnd(K),freshTag:rnd(FR),ap:120*Math.floor(5+Math.random()*18),seed:true}); }
   DB.set('placements',arr);
 }
 /* rotate a social-proof toast periodically (gives the "live" feel) */
