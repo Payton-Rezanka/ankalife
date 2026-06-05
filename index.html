@@ -205,8 +205,18 @@ section.block{padding:64px 22px}
 .field input,.field select,.field textarea{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:#fff}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,107,107,.12)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:12px}
-.checks label{display:flex;align-items:center;gap:8px;font-weight:500;font-size:13.5px}
+/* Toggle-chip pickers (states / carriers) — clean + mobile friendly */
+.picker{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.picker-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;background:var(--sand);font-size:12.5px;flex-wrap:wrap}
+.picker-count{font-weight:800;color:var(--teal);white-space:nowrap}
+.picker-bar a{cursor:pointer;font-weight:700;color:var(--teal)}
+.picker-search{flex:1;min-width:130px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+.checks{display:flex;flex-wrap:wrap;gap:7px;max-height:230px;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px}
+.checks label{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:13px;padding:8px 13px;border:1.5px solid var(--line);border-radius:22px;background:#fff;cursor:pointer;user-select:none;transition:.12s;white-space:nowrap;line-height:1}
+.checks label:hover{border-color:var(--teal)}
+.checks label input{position:absolute;opacity:0;pointer-events:none;width:0;height:0}
+.checks label:has(input:checked){background:var(--teal);color:#fff;border-color:var(--teal)}
+.checks label:has(input:checked)::before{content:"✓";font-weight:900;font-size:11px}
 .note{background:#fff7ea;border:1px solid #f0d9a8;border-radius:10px;padding:12px 14px;font-size:13.5px;color:#7a5a1e;margin:14px 0}
 .note.info{background:#eef6f6;border-color:#bfe0df;color:#205a59}
 .alert{border-radius:12px;padding:16px;margin:14px 0;font-size:14.5px}
@@ -760,11 +770,10 @@ views.signup=()=>`
       <div class="field"><label>Life line of authority active?</label><select id="su_life"><option value="true">Yes — Life line active</option><option value="false">No / not sure</option></select></div>
     </div>
     <div class="field"><label>States you are licensed in</label><div class="hint" style="margin-bottom:6px">Select all that apply.</div>
-      <div class="checks" id="su_states">${STATES.map(s=>`<label><input type="checkbox" value="${s}" class="su_st"> ${s}</label>`).join("")}</div>
+      ${statePicker('su_states','su_st',[])}
     </div>
     <div class="field"><label>Carrier appointments</label><div class="hint" style="margin-bottom:6px">Which carriers are you appointed to write with? (${CARRIERS.length} available — type to filter)</div>
-      <input oninput="filterList(this,'#su_carr')" placeholder="Search carriers…" style="width:100%;margin-bottom:6px;padding:9px 12px;border:1px solid var(--line);border-radius:9px">
-      <div class="checks" id="su_carr">${CARRIERS.map(c=>`<label><input type="checkbox" value="${c}" class="su_ca"> ${c}</label>`).join("")}</div>
+      ${carrierPicker('su_carr','su_ca',[])}
     </div>
     <label style="display:flex;gap:10px;align-items:flex-start;font-size:13.5px;margin:6px 0 16px"><input type="checkbox" id="su_attest" style="margin-top:3px"> <span>I certify that I hold an active resident insurance producer license, that the information above is accurate and current, and I authorize AnkaLife to verify it against the NIPR Producer Database.</span></label>
     <button class="btn btn-teal" style="width:100%" onclick="doSignup()">Verify &amp; create account</button>
@@ -1548,10 +1557,9 @@ function profile(){
     </div>
     <div class="field"><label>NPN (National Producer Number)<span class="hint"> — your license is verified against this</span></label><input id="pf_npn" value="${u.npn||''}" placeholder="e.g. 17428953"></div>
     <div class="field"><label>States licensed</label>
-      <div class="checks">${STATES.map(s=>`<label><input type="checkbox" class="pf_st" value="${s}" ${(u.states||[]).includes(s)?'checked':''}> ${s}</label>`).join("")}</div></div>
+      ${statePicker('pf_states','pf_st',u.states||[])}</div>
     <div class="field"><label>Carrier appointments <span class="hint">(${CARRIERS.length} available — type to filter)</span></label>
-      <input oninput="filterList(this,'#pf_carr')" placeholder="Search carriers…" style="width:100%;margin-bottom:6px;padding:9px 12px;border:1px solid var(--line);border-radius:9px">
-      <div class="checks" id="pf_carr">${CARRIERS.map(c=>`<label><input type="checkbox" class="pf_ca" value="${c}" ${(u.carriers||[]).includes(c)?'checked':''}> ${c}</label>`).join("")}</div></div>
+      ${carrierPicker('pf_carr','pf_ca',u.carriers||[])}</div>
     <button class="btn btn-teal" onclick="saveProfile()">Save changes</button>
     ${u.status==="denied"?`<button class="btn btn-outline" style="margin-left:10px" onclick="rerunVerify()">Re-run license verification</button>`:''}
     <span id="pfMsg" style="margin-left:12px;color:var(--good);font-weight:600"></span>
@@ -1689,10 +1697,9 @@ views.onboard=()=>{
       <div class="field"><label>Life line of authority active?</label><select id="ob_life"><option value="true" ${a.lineLife!==false?'selected':''}>Yes — Life line active</option><option value="false" ${a.lineLife===false?'selected':''}>No / not sure</option></select></div></div>`;
   if(s===2) body=`<h1 style="font-size:21px;margin-bottom:4px">Where & what you can write</h1>
     <p style="color:var(--muted);margin-bottom:14px">Leads are matched to what you can actually sell. You can change these anytime.</p>
-    <div class="field"><label>States you're licensed in</label><div class="checks" id="ob_states">${STATES.map(x=>`<label><input type="checkbox" class="ob_st" value="${x}" ${a.states.includes(x)?'checked':''}> ${x}</label>`).join("")}</div></div>
+    <div class="field"><label>States you're licensed in</label>${statePicker('ob_states','ob_st',a.states)}</div>
     <div class="field"><label>Carrier appointments <span class="hint">(${CARRIERS.length} available — type to filter)</span></label>
-      <input oninput="filterList(this,'#ob_carr')" placeholder="Search carriers…" style="width:100%;margin-bottom:6px;padding:9px 12px;border:1px solid var(--line);border-radius:9px">
-      <div class="checks" id="ob_carr">${CARRIERS.map(c=>`<label><input type="checkbox" class="ob_ca" value="${c}" ${a.carriers.includes(c)?'checked':''}> ${c}</label>`).join("")}</div></div>
+      ${carrierPicker('ob_carr','ob_ca',a.carriers)}</div>
     <label style="display:flex;gap:10px;align-items:flex-start;font-size:13.5px;margin-top:8px"><input type="checkbox" id="ob_attest" ${a.attest?'checked':''}> <span>I certify my information is accurate and current and authorize verification against the NIPR Producer Database.</span></label>`;
   if(s===3){ const v=OB.result; body=`<h1 style="font-size:21px;margin-bottom:10px">Automated verification</h1>
     ${v? (v.approved?`<div class="alert ok"><b>✅ Approved</b> — your license cleared the automated ${v.source} check.</div>`
@@ -2116,6 +2123,28 @@ function startSocialProof(){
 /* ---------- utils ---------- */
 function val(id){const e=document.getElementById(id);return e?e.value.trim():""}
 function filterList(inp,sel){const q=inp.value.toLowerCase();document.querySelectorAll(sel+' label').forEach(l=>{l.style.display=l.textContent.toLowerCase().includes(q)?'':'none';});}
+/* Reusable toggle-chip pickers for states & carriers */
+function statePicker(id, cls, selected){
+  selected=selected||[];
+  return `<div class="picker">
+    <div class="picker-bar"><span class="picker-count" id="${id}_n">${selected.length} selected</span>
+      <span><a onclick="pickAll('#${id}','${cls}',true)">Select all</a> &nbsp;·&nbsp; <a onclick="pickAll('#${id}','${cls}',false)">Clear</a></span></div>
+    <div class="checks" id="${id}" onchange="pickCount('#${id}','${cls}')">
+      ${STATES.map(s=>`<label><input type="checkbox" class="${cls}" value="${s}" ${selected.includes(s)?'checked':''}> ${s}</label>`).join("")}
+    </div></div>`;
+}
+function carrierPicker(id, cls, selected){
+  selected=selected||[];
+  return `<div class="picker">
+    <div class="picker-bar"><span class="picker-count" id="${id}_n">${selected.length} selected</span>
+      <input class="picker-search" oninput="filterList(this,'#${id}')" placeholder="Search ${CARRIERS.length} carriers…">
+      <a onclick="pickAll('#${id}','${cls}',false)">Clear</a></div>
+    <div class="checks" id="${id}" onchange="pickCount('#${id}','${cls}')">
+      ${CARRIERS.map(c=>`<label><input type="checkbox" class="${cls}" value="${c}" ${selected.includes(c)?'checked':''}> ${c}</label>`).join("")}
+    </div></div>`;
+}
+function pickCount(sel,cls){ const n=document.getElementById(sel.replace('#','')+'_n'); if(n) n.textContent=document.querySelectorAll(sel+' .'+cls+':checked').length+' selected'; }
+function pickAll(sel,cls,val){ document.querySelectorAll(sel+' label').forEach(l=>{ if(l.style.display!=='none'){ const cb=l.querySelector('input.'+cls); if(cb) cb.checked=val; } }); pickCount(sel,cls); }
 
 /* ---------- boot ---------- */
 (function captureRef(){
