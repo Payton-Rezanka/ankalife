@@ -1486,6 +1486,14 @@ function ownerSubmissions(){
       <a class="btn btn-outline btn-sm" href="sms:?&body=${encodeURIComponent('Free life insurance quote: '+surveyPublicLink())}"><i class="ph ph-chat-text"></i> Text</a>
       <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${encodeURIComponent('Get a free life insurance quote in 2 minutes: '+surveyPublicLink())}"><i class="ph ph-x-logo"></i> X</a>
     </div>
+    <div style="display:flex;gap:16px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap">
+      <img src="qr-survey.png" alt="Survey QR code" width="120" height="120" style="border:1px solid var(--line);border-radius:10px;background:#fff;padding:4px">
+      <div style="flex:1;min-width:200px">
+        <b style="font-size:14px"><i class="ph-bold ph-qr-code"></i> Scannable QR code</b>
+        <p style="color:var(--muted);font-size:13px;margin:4px 0 8px">Print it on flyers, business cards, or your booth — anyone who scans it lands on the survey.</p>
+        <a class="btn btn-outline btn-sm" href="qr-survey.png" download="ankalife-survey-qr.png"><i class="ph-bold ph-download-simple"></i> Download QR</a>
+      </div>
+    </div>
   </div>
 
   <div class="stat-row">

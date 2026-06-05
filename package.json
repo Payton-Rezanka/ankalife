@@ -15,5 +15,8 @@
     "marketplace"
   ],
   "license": "UNLICENSED",
-  "author": ""
+  "author": "",
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  }
 }
