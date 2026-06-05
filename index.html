@@ -319,7 +319,7 @@ function scoreLead(a){
   // Timeframe to buy (strongest signal)
   add("Buying timeframe", ({asap:25,"30days":20,"90days:":12,researching:4,"":2}[a.timeframe]??8), 25);
   // Coverage amount need
-  add("Coverage need", ({"1m+":15,"500k":13,"250k":10,"100k":7,"<100k":5,"":4}[a.coverage]??7), 15);
+  add("Coverage need", ({"200k+":15,"100-200k":13,"50-100k":11,"35-50k":9,"20-35k":7,"10-20k":6,"5-10k":5,"":4}[a.coverage]??7), 15);
   // Has no existing coverage (real gap)
   add("Coverage gap", a.existing==="none"?14 : a.existing==="some"?7 : 3, 14);
   // Life trigger event
@@ -327,9 +327,9 @@ function scoreLead(a){
   // Budget / ability to pay
   add("Stated budget", ({"150+":12,"75-150":10,"40-75":7,"<40":4,unsure:3,"":3}[a.budget]??5), 12);
   // Income band
-  add("Income band", ({"150k+":8,"100k":7,"60k":5,"35k":3,"<35k":2,"":3}[a.income]??4), 8);
+  add("Income band", ({"150k+":8,"100-150k":7,"60-100k":6,"40-60k":5,"25-40k":4,"15-25k":3,"<15k":2,"":3}[a.income]??4), 8);
   // Contactability / engagement
-  add("Contact readiness", ({callnow:8,today:7,evening:5,email:3,"":3}[a.contact]??4), 8);
+  add("Contact readiness", (a.anyday?8 : a.emailfirst?3 : (a.days&&a.days.length)?6 : ({callnow:8,today:7,evening:5,email:3}[a.contact]??4)), 8);
   // Health (affects insurability & close)
   add("Insurability", ({excellent:6,good:5,fair:3,poor:1,"":3}[a.health]??3), 6);
   let raw = f.reduce((s,x)=>s+x.pts,0);
@@ -348,9 +348,10 @@ function recommend(a){
   const age=+a.age||40, recs=[];
   const push=(name,prod,why)=>{ if(recs.length<3) recs.push({name,prod,why}) };
   const senior = age>=60, smoker=a.tobacco==="yes", poorHealth=["fair","poor"].includes(a.health);
-  const wealthy = ["150k+","100k"].includes(a.income), bigNeed=["1m+","500k"].includes(a.coverage);
+  const wealthy = ["150k+","100-150k"].includes(a.income), bigNeed=["200k+","100-200k"].includes(a.coverage);
+  const smallFace = ["5-10k","10-20k","20-35k","35-50k"].includes(a.coverage);
 
-  if(senior && (a.coverage==="<100k"||a.coverage==="100k") || a.trigger==="none" && senior){
+  if(senior && smallFace || a.trigger==="none" && senior){
     push("Mutual of Omaha","Final Expense / Whole Life","Strong senior underwriting, simplified issue up to ~$40k, fast approval for burial/final-expense need.");
     push("Corebridge (AIG)","Guaranteed Issue Whole Life","No-medical guaranteed acceptance for ages 50-85 — ideal when health is a concern.");
     push("Gerber Life","Guaranteed Whole Life","Reliable small-face whole life, no exam, locked premiums for final-expense buyers.");
@@ -404,10 +405,10 @@ function categorize(a){
   const age=+a.age||40;
   if(a.military && a.military!=="no") return "Veteran";
   if(age>=65) return "Senior / Medicare";
-  if((age>=55) && (a.coverage==="<100k"||a.coverage==="100k")) return "Final Expense";
+  if((age>=55) && ["5-10k","10-20k","20-35k","35-50k"].includes(a.coverage)) return "Final Expense";
   if(a.trigger==="mortgage") return "Mortgage Protection";
   if(a.trigger==="business") return "Business / Key-Person";
-  if((a.income==="150k+"||a.income==="100k") && (a.coverage==="1m+"||a.coverage==="500k")) return "IUL / Wealth";
+  if((a.income==="150k+"||a.income==="100-150k") && (a.coverage==="200k+"||a.coverage==="100-200k")) return "IUL / Wealth";
   return "Term Life";
 }
 const CAT_ICON={"Veteran":"ph-medal","Final Expense":"ph-flower-lotus","Mortgage Protection":"ph-house-line","Term Life":"ph-umbrella","IUL / Wealth":"ph-trend-up","Senior / Medicare":"ph-first-aid-kit","Business / Key-Person":"ph-briefcase"};
@@ -417,6 +418,35 @@ function leadDays(l){ return l.daysAgo!=null ? l.daysAgo : Math.floor((Date.now(
 function freshKey(l){ const d=leadDays(l); const b=FRESH_BUCKETS.find(x=>d>=x[2]&&d<=x[3]); return b?b[0]:"d90"; }
 function freshLabel(l){ const k=freshKey(l); const b=FRESH_BUCKETS.find(x=>x[0]===k); return b?b[1]:"Aged"; }
 
+/* ---------- Coverage / income reference + affordability estimator ----------
+   Premium model grounded in real whole-life/final-expense rate charts
+   (e.g. ~$416/mo for $100k WL at 65; ~$25-40/mo for $10k FE at younger senior). */
+const COV_MID={"5-10k":7.5,"10-20k":15,"20-35k":27.5,"35-50k":42.5,"50-100k":75,"100-200k":150,"200k+":250}; // thousands
+const INC_MONTHLY={"150k+":15000,"100-150k":10400,"60-100k":6700,"40-60k":4200,"25-40k":2700,"15-25k":1700,"<15k":1000};
+const DAYS=[["mon","Mon"],["tue","Tue"],["wed","Wed"],["thu","Thu"],["fri","Fri"],["sat","Sat"],["sun","Sun"]];
+function estMonthlyPremium(a){
+  const mid=COV_MID[a.coverage]; if(mid==null) return null;
+  const age=+a.age||50;
+  const rateK = age<40?0.7 : age<50?1.3 : age<60?2.5 : age<70?4 : age<80?7 : 11; // $/mo per $1k face
+  let p=mid*rateK;
+  if(a.tobacco==="yes") p*=1.5;
+  if(a.health==="fair") p*=1.2; else if(a.health==="poor") p*=1.45;
+  return Math.round(p);
+}
+function affordabilityWarning(a){
+  const prem=estMonthlyPremium(a), inc=INC_MONTHLY[a.income];
+  if(prem==null||inc==null) return null;
+  const pct=prem/inc;
+  if(pct>=0.10) return {prem, pct:Math.round(pct*100)};
+  return null;
+}
+function contactLabel(a){
+  if(a.anyday) return "Any day"+(a.emailfirst?" · email first":"");
+  const map={mon:"Mon",tue:"Tue",wed:"Wed",thu:"Thu",fri:"Fri",sat:"Sat",sun:"Sun"};
+  const d=(a.days||[]).map(x=>map[x]).filter(Boolean).join(", ");
+  return (d||(a.contact||"—"))+(a.emailfirst?" · email first":"");
+}
+
 /* ---------- Seed marketplace leads ---------- */
 const FIRST=["James","Maria","Robert","Latisha","David","Jennifer","Carlos","Susan","Michael","Aisha","William","Linda","Thomas","Patricia","Kevin","Nicole","Andre","Emily","Hassan","Grace","Daniel","Sofia","Brian","Monica","Raymond","Tanya","Victor","Hannah","George","Diane"];
 const LAST=["Carter","Nguyen","Johnson","Brooks","Patel","Reyes","Thompson","Walker","Morales","Bennett","Foster","Coleman","Rivera","Hughes","Sanders","Price","Ward","Diaz","Khan","Bell","Murphy","Castillo","Watson","Hayes","Long","Ramos","Cole","Fisher","Powell","Greer"];
@@ -424,22 +454,24 @@ function rnd(arr){return arr[Math.floor(Math.random()*arr.length)]}
 function seedLeads(){
   const types=["exclusive","exclusive","shared","shared","shared","livetransfer","aged"];
   const tf=["asap","30days","90days:","researching"];
-  const cov=["1m+","500k","250k","100k","<100k"];
+  const cov=["5-10k","10-20k","20-35k","35-50k","50-100k","100-200k","200k+"];
   const trig=["newbaby","mortgage","marriage","business","debt","none"];
   const bud=["150+","75-150","40-75","<40","unsure"];
-  const inc=["150k+","100k","60k","35k","<35k"];
+  const inc=["150k+","100-150k","60-100k","40-60k","25-40k","15-25k","<15k"];
   const hlth=["excellent","good","fair","poor"];
   const ex=["none","some","old"];
-  const ct=["callnow","today","evening","email"];
   let out=[];
   for(let i=0;i<26;i++){
+    const anyday=Math.random()<0.45;
     const a={
       age: 24+Math.floor(Math.random()*55),
       timeframe:rnd(tf), coverage:rnd(cov), trigger:rnd(trig), budget:rnd(bud),
-      income:rnd(inc), health:rnd(hlth), existing:rnd(ex), contact:rnd(ct),
+      income:rnd(inc), health:rnd(hlth), existing:rnd(ex),
       tobacco: Math.random()<0.22?"yes":"no",
+      gender: rnd(["male","female"]),
       military: Math.random()<0.2?(Math.random()<0.7?"me":"spouse"):"no",
-      dependents: rnd(["0","1","2","3+"])
+      dependents: rnd(["0","1","2","3+"]),
+      anyday, days: anyday?[]:DAYS.filter(()=>Math.random()<0.5).map(d=>d[0]), emailfirst: Math.random()<0.2
     };
     const score=scoreLead(a);
     const type=rnd(types);
@@ -680,19 +712,20 @@ views.signup=()=>`
 let SV={step:0,a:{}};
 const SVQ=[
   {k:"timeframe",t:"When are you hoping to have coverage in place?",h:"Be honest — there's no wrong answer.",o:[["asap","As soon as possible"],["30days","Within 30 days"],["90days:","In the next few months"],["researching","Just researching for now"]]},
-  {k:"coverage",t:"How much coverage are you looking for?",h:"A common rule of thumb is 10× your income.",o:[["1m+","$1,000,000+"],["500k","$500,000"],["250k","$250,000"],["100k","$100,000"],["<100k","Under $100,000 / final expense"]]},
+  {k:"coverage",t:"How much coverage are you looking for?",h:"Even a small policy can cover funeral costs and final bills — there's no amount too small.",o:[["5-10k","$5,000 – $10,000"],["10-20k","$10,000 – $20,000"],["20-35k","$20,000 – $35,000"],["35-50k","$35,000 – $50,000"],["50-100k","$50,000 – $100,000"],["100-200k","$100,000 – $200,000"],["200k+","$200,000+"]]},
+  {k:"who",t:"Who is this coverage for?",h:"",o:[["self","Myself"],["spouse","My spouse / partner"],["child","A child or grandchild"],["parent","A parent"],["family","My whole family"]]},
   {k:"dependents",t:"How many people depend on your income?",h:"This helps size the right coverage.",o:[["0","Just me"],["1","1 person"],["2","2 people"],["3+","3 or more"]]},
-  {k:"trigger",t:"What's prompting you to look now?",h:"This helps us match the right policy.",o:[["newbaby","New baby / growing family"],["mortgage","Mortgage / home"],["marriage","Marriage / partner"],["business","Business or key-person need"],["debt","Debt / income protection"],["none","No specific reason"]]},
+  {k:"trigger",t:"What's prompting you to look now?",h:"This helps us match the right policy.",o:[["newbaby","New baby / growing family"],["mortgage","Mortgage / home"],["marriage","Marriage / partner"],["finalexpense","Cover funeral / final expenses"],["business","Business or key-person need"],["debt","Debt / income protection"],["none","No specific reason"]]},
   {k:"military",t:"Have you or your spouse served in the U.S. military?",h:"Veterans and families may qualify for special programs.",o:[["me","Yes — I served"],["spouse","Yes — my spouse served"],["no","No"]]},
   {k:"branch",t:"Thank you for your service. Which branch?",h:"",o:[["army","Army"],["navy","Navy"],["airforce","Air Force"],["marines","Marines"],["coastguard","Coast Guard"],["space","Space Force"]],when:a=>a.military&&a.military!=="no"},
   {k:"age",t:"What's your age?",h:"Rates are based largely on age.",type:"number"},
+  {k:"gender",t:"What's your gender?",h:"Carriers price rates differently by gender.",o:[["female","Female"],["male","Male"]]},
   {k:"health",t:"How would you describe your health?",h:"",o:[["excellent","Excellent"],["good","Good"],["fair","Fair / some conditions"],["poor","Significant conditions"]]},
   {k:"conditions",t:"Any of these conditions? (helps us match the right carrier)",h:"",o:[["none","None of these"],["diabetes","Diabetes"],["heart","Heart condition"],["cancer","Cancer history"],["other","Other"]],when:a=>a.health==="fair"||a.health==="poor"},
   {k:"tobacco",t:"Have you used tobacco or nicotine in the last 12 months?",h:"",o:[["no","No"],["yes","Yes"]]},
   {k:"existing",t:"Do you currently have life insurance?",h:"",o:[["none","No coverage"],["some","Some, but not enough"],["old","An old policy I should review"]]},
-  {k:"income",t:"What's your approximate household income?",h:"Used to size the right coverage.",o:[["150k+","$150,000+"],["100k","$100,000–150,000"],["60k","$60,000–100,000"],["35k","$35,000–60,000"],["<35k","Under $35,000"]]},
-  {k:"budget",t:"Roughly what monthly premium feels comfortable?",h:"",o:[["150+","$150+ / month"],["75-150","$75–150 / month"],["40-75","$40–75 / month"],["<40","Under $40 / month"],["unsure","Not sure yet"]]},
-  {k:"contact",t:"When's the best time for a licensed agent to reach you?",h:"",o:[["callnow","Call me now"],["today","Sometime today"],["evening","Evenings"],["email","Email me first"]]}
+  {k:"income",t:"What's your approximate household income?",h:"This lets your agent find a premium that comfortably fits your budget.",o:[["150k+","$150,000+ / year"],["100-150k","$100,000 – $150,000"],["60-100k","$60,000 – $100,000"],["40-60k","$40,000 – $60,000"],["25-40k","$25,000 – $40,000"],["15-25k","$15,000 – $25,000"],["<15k","Under $15,000"]]},
+  {k:"contact",t:"When's the best time for a licensed agent to reach you?",h:"Most agents will give you a quick call. Pick any days that work.",type:"contact"}
 ];
 function activeQs(){ return SVQ.filter(q=>!q.when || q.when(SV.a)); }
 views.survey=()=>{
@@ -705,31 +738,35 @@ views.survey=()=>{
       <div class="q"><div class="qh">Step ${SV.step+1} of ${qs.length}</div><h3>${q.t}</h3><div class="qh">${q.h||""}</div>
       ${q.type==="number"
         ? `<input id="sv_num" type="number" min="18" max="85" placeholder="Enter age" style="padding:14px;border:1.5px solid var(--line);border-radius:12px;width:100%;font-size:17px">`
+        : q.type==="contact"
+        ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${DAYS.map(d=>`<div class="opt ${(SV.a.days||[]).includes(d[0])?'sel':''}" style="padding:11px 16px;flex:0 0 auto;justify-content:center" onclick="svToggleDay('${d[0]}')">${d[1]}</div>`).join("")}</div>
+           <label class="opt ${SV.a.anyday?'sel':''}" style="margin-bottom:8px" onclick="svToggleAny();event.preventDefault()"><span class="rad"></span> Any day works for me</label>
+           <label class="opt ${SV.a.emailfirst?'sel':''}" onclick="svToggleEmail();event.preventDefault()"><span class="rad"></span> I'd prefer to be emailed first</label>
+           <div class="qh" style="margin-top:10px">Your phone number is collected on the next step.</div>`
         : `<div class="opts">${q.o.map(o=>`<div class="opt ${SV.a[q.k]===o[0]?'sel':''}" onclick="pickSurvey('${q.k}','${o[0]}')"><span class="rad"></span>${o[1]}</div>`).join("")}</div>`}
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:8px">
         <button class="btn btn-outline" ${SV.step===0?'disabled':''} onclick="svBack()">← Back</button>
         ${q.type==="number"?`<button class="btn btn-teal" onclick="svNumNext()">Continue →</button>`:``}
+        ${q.type==="contact"?`<button class="btn btn-teal" onclick="svContactNext()">Continue →</button>`:``}
       </div>
     </div>
   </div>`;
 };
 function surveyResult(){
-  const a=SV.a, sc=scoreLead(a), recs=recommend(a);
+  const a=SV.a;
+  const warn=affordabilityWarning(a);
   return `<div class="container" style="max-width:640px">
     <div class="form-card">
       <div style="text-align:center">
         <div style="font-size:46px;color:var(--good)"><i class="ph-duotone ph-seal-check"></i></div>
-        <h1 style="font-size:24px;margin:6px 0">You're matched!</h1>
-        <p style="color:var(--muted)">Enter your details below and a licensed agent will reach out ${a.contact==='callnow'?'shortly':'at your preferred time'} with your real quote.</p>
-        <div style="display:inline-flex;gap:14px;align-items:center;margin:18px 0;padding:14px 22px;background:var(--sand);border-radius:14px">
-          <div class="score-badge tier${sc.tier}" style="min-width:78px"><div class="n">${sc.score}</div><small>Tier ${sc.tier}</small></div>
-          <div style="text-align:left"><b>Purchase-intent score</b><br><span style="color:var(--muted);font-size:13.5px">How ready you are to put coverage in place</span></div>
-        </div>
+        <h1 style="font-size:24px;margin:6px 0">You're all set — one last step</h1>
+        <p style="color:var(--muted)">Enter your details below and a licensed agent will reach out at your preferred time with real quotes built around your needs.</p>
       </div>
-      <div style="margin-top:6px"><h3 style="font-size:17px;margin-bottom:8px">Recommended carriers for you</h3>
-        <div class="recs">${recs.map(r=>`<div class="rec"><h4>${r.name}</h4><div class="prod">${r.prod}</div><p>${r.why}</p></div>`).join("")}</div>
-      </div>
+      ${warn?`<div class="alert" style="background:#fff7ea;border:1px solid #f0d9a8;color:#7a5a1e;margin:16px 0">
+        <b><i class="ph-bold ph-info"></i> A quick, honest heads-up</b>
+        <p style="margin-top:6px;font-size:13.5px">A policy around <b>${covLabel(a.coverage)}</b> could run roughly <b>$${warn.prem}/month</b> at your age${a.tobacco==='yes'?' as a tobacco user':''} — about <b>${warn.pct}% of your monthly income</b>, which may be a stretch. Don't worry: your licensed agent will walk through every option to fit your budget — a smaller policy, a different product, or a payment that works — so you're never pushed into something you can't comfortably afford. There's no obligation.</p>
+      </div>`:''}
       <h3 style="font-size:17px;margin:20px 0 10px">Where should your agent reach you?</h3>
       <div id="cErr"></div>
       <div class="two">
@@ -994,7 +1031,7 @@ function leadCard(l,owned){
     </div>
   </div>`;
 }
-function covLabel(c){return {"1m+":"$1M+","500k":"$500k","250k":"$250k","100k":"$100k","<100k":"Final expense"}[c]||c}
+function covLabel(c){return {"5-10k":"$5–10k","10-20k":"$10–20k","20-35k":"$20–35k","35-50k":"$35–50k","50-100k":"$50–100k","100-200k":"$100–200k","200k+":"$200k+"}[c]||c}
 function trigLabel(t){return {newbaby:"New baby",mortgage:"Mortgage",marriage:"Marriage",business:"Business",debt:"Debt/income",none:"General"}[t]||t}
 function statusLabel(s){return {new:"New",contacted:"Contacted",appt:"Appt set",sold:"Sold",credited:"Credited"}[s]||s}
 
@@ -1125,7 +1162,7 @@ function aiEngine(){
     </div>
   </div>`;
 }
-const SAMPLE_LEAD={first:"Sam",last:"Doe",state:"TX",a:{trigger:"newbaby",coverage:"500k"},recs:[{name:"Banner Life (Legal & General)",prod:"Level Term"}],score:{tier:"A"}};
+const SAMPLE_LEAD={first:"Sam",last:"Doe",state:"TX",a:{trigger:"newbaby",coverage:"100-200k"},recs:[{name:"Banner Life (Legal & General)",prod:"Level Term"}],score:{tier:"A"}};
 
 let CALL={leadId:null,timer:null,sec:0,playing:false,voices:[]};
 function loadVoices(){
@@ -1325,13 +1362,13 @@ function surveyAsText(){
 }
 function copySurveyText(){ navigator.clipboard?.writeText(surveyAsText()).then(()=>{const b=document.getElementById('svTextBtn');if(b){b.innerHTML='<i class="ph-bold ph-check"></i> Copied!';setTimeout(()=>b.innerHTML='<i class="ph-bold ph-clipboard-text"></i> Copy survey text',1800);}}); }
 function ownerExportCSV(){
-  const cols=["Created","First","Last","Phone","Email","State","ZIP","Age","Category","Tier","Score","Type","Freshness","DaysAgo","Coverage","Dependents","Trigger","Military","Branch","Income","Budget","Health","Conditions","Tobacco","Existing","BestTime","Source","Consent","ConsentAt","Price","Status"];
+  const cols=["Created","First","Last","Phone","Email","State","ZIP","Age","Category","Tier","Score","Type","Freshness","DaysAgo","Coverage","Dependents","Trigger","Military","Branch","Income","Gender","Health","Conditions","Tobacco","Existing","BestTime","Source","Consent","ConsentAt","Price","Status"];
   const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;
   const rows=ownerLeadList(LEADS).map(l=>[
     l.createdAt?new Date(l.createdAt).toLocaleString():"", l.first, l.last, l.phone, l.email, l.state, l.zip||"", l.a.age,
     l.category||categorize(l.a), l.score.tier, l.score.score, l.type, freshLabel(l), leadDays(l),
     covLabel(l.a.coverage), l.a.dependents||"", trigLabel(l.a.trigger), l.a.military||"no", l.a.branch||"",
-    l.a.income, l.a.budget, l.a.health, l.a.conditions||"", l.a.tobacco, l.a.existing, l.a.contact,
+    l.a.income, l.a.gender||"", l.a.health, l.a.conditions||"", l.a.tobacco, l.a.existing, contactLabel(l.a),
     l.source||"", l.consent?.given?"Yes":"No", l.consent?.at||"", l.price, l.status
   ].map(esc).join(","));
   const csv=[cols.join(","),...rows].join("\n");
@@ -1424,7 +1461,7 @@ function ownerSubmissions(){
         <td style="padding:8px 10px">${l.a.health}</td>
         <td style="padding:8px 10px">${l.a.tobacco}</td>
         <td style="padding:8px 10px">${l.a.existing}</td>
-        <td style="padding:8px 10px">${l.a.contact}</td>
+        <td style="padding:8px 10px">${contactLabel(l.a)}</td>
         <td style="padding:8px 10px">${l.source||'—'}</td>
         <td style="padding:8px 10px">${l.consent?.given?'<span style="color:var(--good)">✓</span>':'<span style="color:var(--bad)">✗</span>'}</td>
       </tr>`;}).join("") : `<tr><td colspan="23" style="padding:30px;text-align:center;color:var(--muted)">No submissions match your filters.</td></tr>`}
@@ -1634,6 +1671,10 @@ function doSignup(){
 function pickSurvey(k,v){ SV.a[k]=v; render('survey'); setTimeout(()=>{ SV.step++; render('survey'); },180); }
 function svNumNext(){ const n=val('sv_num'); if(!n){alert('Please enter your age.');return;} SV.a.age=+n; SV.step++; render('survey'); }
 function svBack(){ if(SV.step>0){SV.step--; render('survey');} }
+function svToggleDay(d){ SV.a.days=SV.a.days||[]; const i=SV.a.days.indexOf(d); if(i>=0)SV.a.days.splice(i,1); else{ SV.a.days.push(d); SV.a.anyday=false; } render('survey'); }
+function svToggleAny(){ SV.a.anyday=!SV.a.anyday; if(SV.a.anyday)SV.a.days=[]; render('survey'); }
+function svToggleEmail(){ SV.a.emailfirst=!SV.a.emailfirst; render('survey'); }
+function svContactNext(){ if(!SV.a.anyday && !(SV.a.days&&SV.a.days.length) && !SV.a.emailfirst){ alert('Please pick at least one day, "any day," or "email me first."'); return; } SV.step++; render('survey'); }
 function submitSurvey(){
   const first=val('c_first'), last=val('c_last'), phone=val('c_phone'), email=val('c_email'), state=val('c_state'), zip=val('c_zip');
   const consent=document.getElementById('c_consent')?.checked;
@@ -1786,10 +1827,14 @@ function openLead(id,owned){
     <h3 style="margin:18px 0 8px;font-size:16px">Survey snapshot</h3>
     <div class="chips">
       <span class="chip">Timeframe: ${({asap:'ASAP','30days':'30 days','90days:':'few months',researching:'researching'})[l.a.timeframe]||l.a.timeframe}</span>
-      <span class="chip">Budget: ${l.a.budget}</span><span class="chip">Income: ${l.a.income}</span>
+      <span class="chip">Coverage: ${covLabel(l.a.coverage)}</span><span class="chip">Income: ${l.a.income}</span>
+      <span class="chip b">Age: ${l.a.age}</span><span class="chip b">Gender: ${l.a.gender||'—'}</span>
+      <span class="chip b">For: ${l.a.who||'self'}</span><span class="chip b">Dependents: ${l.a.dependents||'—'}</span>
       <span class="chip b">Health: ${l.a.health}</span><span class="chip b">Tobacco: ${l.a.tobacco}</span>
-      <span class="chip b">Existing: ${l.a.existing}</span><span class="chip b">Best time: ${l.a.contact}</span>
+      ${l.a.military&&l.a.military!=='no'?`<span class="chip">Veteran: ${l.a.military}${l.a.branch?' ('+l.a.branch+')':''}</span>`:''}
+      <span class="chip b">Existing: ${l.a.existing}</span><span class="chip b">Best time: ${contactLabel(l.a)}</span>
     </div>
+    ${estMonthlyPremium(l.a)!=null?`<div class="note info" style="margin-top:10px"><i class="ph-bold ph-calculator"></i> <b>Est. premium:</b> ~$${estMonthlyPremium(l.a)}/mo for ${covLabel(l.a.coverage)} (rough whole-life estimate — quote to confirm).</div>`:''}
     <div style="margin-top:18px">${
       isOwned
        ? (SESSION.role==="owner"? `<button class="btn btn-primary" style="width:100%" onclick="closeModal();selectAndGo('${l.id}')"><i class="ph ph-phone-call"></i> Send to AI Sales Engine</button>`
