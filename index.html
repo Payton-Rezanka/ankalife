@@ -393,20 +393,20 @@ const CARRIERS = ["AAA Life","Aetna (CVS Health)","Aflac","Allianz Life","Allsta
 function scoreLead(a){
   let f=[];
   const add=(label,pts,max)=>{f.push({label,pts,max})};
-  // Timeframe to buy (strongest signal)
-  add("Buying timeframe", ({asap:25,"30days":20,"90days:":12,researching:4,"":2}[a.timeframe]??8), 25);
+  // Self-reported purchase intent — the single strongest close-rate predictor
+  add("Stated purchase intent", ({ready:22,soon:16,comparing:8,researching:3,"":6}[a.likelihood]??6), 22);
+  // Timeframe to have coverage in place
+  add("Buying timeframe", ({asap:22,"30days":17,"90days:":10,researching:3,"":6}[a.timeframe]??7), 22);
   // Coverage amount need
-  add("Coverage need", ({"200k+":15,"100-200k":13,"50-100k":11,"35-50k":9,"20-35k":7,"10-20k":6,"5-10k":5,"":4}[a.coverage]??7), 15);
+  add("Coverage need", ({"200k+":12,"100-200k":11,"50-100k":9,"35-50k":7,"20-35k":6,"10-20k":5,"5-10k":4,"":4}[a.coverage]??6), 12);
   // Has no existing coverage (real gap)
-  add("Coverage gap", a.existing==="none"?14 : a.existing==="some"?7 : 3, 14);
+  add("Coverage gap", a.existing==="none"?12 : a.existing==="some"?7 : 3, 12);
   // Life trigger event
-  add("Life trigger", ({newbaby:12,mortgage:11,marriage:8,business:9,debt:7,none:2,"":3}[a.trigger]??5), 12);
-  // Budget / ability to pay
-  add("Stated budget", ({"150+":12,"75-150":10,"40-75":7,"<40":4,unsure:3,"":3}[a.budget]??5), 12);
-  // Income band
+  add("Life trigger", ({newbaby:10,mortgage:9,marriage:7,finalexpense:8,business:7,debt:6,none:2,"":3}[a.trigger]??5), 10);
+  // Income band (ability to pay)
   add("Income band", ({"150k+":8,"100-150k":7,"60-100k":6,"40-60k":5,"25-40k":4,"15-25k":3,"<15k":2,"":3}[a.income]??4), 8);
-  // Contactability / engagement
-  add("Contact readiness", (a.anyday?8 : a.emailfirst?3 : (a.days&&a.days.length)?6 : ({callnow:8,today:7,evening:5,email:3}[a.contact]??4)), 8);
+  // Contactability / engagement (time-of-day reachability)
+  add("Contact readiness", (a.anytime?8 : a.emailfirst?3 : (a.times&&a.times.length)?6 : ({callnow:8,today:7,evening:5,email:3}[a.contact]??4)), 8);
   // Health (affects insurability & close)
   add("Insurability", ({excellent:6,good:5,fair:3,poor:1,"":3}[a.health]??3), 6);
   let raw = f.reduce((s,x)=>s+x.pts,0);
@@ -472,7 +472,7 @@ function priceLead(L){
     const f=({fresh:1,d8_30:0.8,d31_90:0.55,d90:0.35})[freshKey(L)]??0.5;
     return Math.max(1,Math.round(base*f));
   }
-  return ({A:25,B:20,C:15,D:10})[tier]; // shared
+  return ({A:75,B:58,C:42,D:30})[tier]; // default = exclusive
 }
 
 /* ---------- Lead category engine (modeled on top vendors: GOAT, Badass, Redbird) ----------
@@ -480,11 +480,17 @@ function priceLead(L){
 const CATEGORIES=["Veteran","Final Expense","Mortgage Protection","Term Life","IUL / Wealth","Senior / Medicare","Business / Key-Person"];
 function categorize(a){
   const age=+a.age||40;
+  // 1) Hard overrides — these define the vertical regardless of product preference
   if(a.military && a.military!=="no") return "Veteran";
-  if(age>=65) return "Senior / Medicare";
-  if((age>=55) && ["5-10k","10-20k","20-35k","35-50k"].includes(a.coverage)) return "Final Expense";
-  if(a.trigger==="mortgage") return "Mortgage Protection";
+  if(a.trigger==="mortgage" || a.productType==="mortgage") return "Mortgage Protection";
   if(a.trigger==="business") return "Business / Key-Person";
+  // 2) Explicit product choice the client made (when they told us)
+  if(a.productType==="whole" || a.trigger==="finalexpense") return (age>=60?"Final Expense":"Final Expense");
+  if(a.productType==="iul") return "IUL / Wealth";
+  if(a.productType==="term") return "Term Life";
+  // 3) Inferred when they picked "I don't know" / didn't specify
+  if(age>=65) return "Senior / Medicare";
+  if(age>=55 && ["5-10k","10-20k","20-35k","35-50k"].includes(a.coverage)) return "Final Expense";
   if((a.income==="150k+"||a.income==="100-150k") && (a.coverage==="200k+"||a.coverage==="100-200k")) return "IUL / Wealth";
   return "Term Life";
 }
@@ -500,7 +506,7 @@ function freshLabel(l){ const k=freshKey(l); const b=FRESH_BUCKETS.find(x=>x[0]=
    (e.g. ~$416/mo for $100k WL at 65; ~$25-40/mo for $10k FE at younger senior). */
 const COV_MID={"5-10k":7.5,"10-20k":15,"20-35k":27.5,"35-50k":42.5,"50-100k":75,"100-200k":150,"200k+":250}; // thousands
 const INC_MONTHLY={"150k+":15000,"100-150k":10400,"60-100k":6700,"40-60k":4200,"25-40k":2700,"15-25k":1700,"<15k":1000};
-const DAYS=[["mon","Mon"],["tue","Tue"],["wed","Wed"],["thu","Thu"],["fri","Fri"],["sat","Sat"],["sun","Sun"]];
+const TIMES=[["morning","Morning (8am–12pm)"],["afternoon","Afternoon (12–5pm)"],["evening","Evening (5–9pm)"]];
 function estMonthlyPremium(a){
   const mid=COV_MID[a.coverage]; if(mid==null) return null;
   const age=+a.age||50;
@@ -518,10 +524,10 @@ function affordabilityWarning(a){
   return null;
 }
 function contactLabel(a){
-  if(a.anyday) return "Any day"+(a.emailfirst?" · email first":"");
-  const map={mon:"Mon",tue:"Tue",wed:"Wed",thu:"Thu",fri:"Fri",sat:"Sat",sun:"Sun"};
-  const d=(a.days||[]).map(x=>map[x]).filter(Boolean).join(", ");
-  return (d||(a.contact||"—"))+(a.emailfirst?" · email first":"");
+  if(a.anytime) return "Any time"+(a.emailfirst?" · email first":"");
+  const map={morning:"Morning",afternoon:"Afternoon",evening:"Evening"};
+  const t=(a.times||[]).map(x=>map[x]).filter(Boolean).join(", ");
+  return (t||(a.contact||"—"))+(a.emailfirst?" · email first":"");
 }
 
 /* ---------- Seed marketplace leads ---------- */
@@ -529,7 +535,7 @@ const FIRST=["James","Maria","Robert","Latisha","David","Jennifer","Carlos","Sus
 const LAST=["Carter","Nguyen","Johnson","Brooks","Patel","Reyes","Thompson","Walker","Morales","Bennett","Foster","Coleman","Rivera","Hughes","Sanders","Price","Ward","Diaz","Khan","Bell","Murphy","Castillo","Watson","Hayes","Long","Ramos","Cole","Fisher","Powell","Greer"];
 function rnd(arr){return arr[Math.floor(Math.random()*arr.length)]}
 function seedLeads(){
-  const types=["exclusive","exclusive","shared","shared","shared","livetransfer","aged"];
+  const types=["exclusive","exclusive","exclusive","exclusive","livetransfer","aged","aged"];
   const tf=["asap","30days","90days:","researching"];
   const cov=["5-10k","10-20k","20-35k","35-50k","50-100k","100-200k","200k+"];
   const trig=["newbaby","mortgage","marriage","business","debt","none"];
@@ -539,16 +545,18 @@ function seedLeads(){
   const ex=["none","some","old"];
   let out=[];
   for(let i=0;i<26;i++){
-    const anyday=Math.random()<0.45;
+    const anytime=Math.random()<0.45;
     const a={
       age: 24+Math.floor(Math.random()*55),
       timeframe:rnd(tf), coverage:rnd(cov), trigger:rnd(trig), budget:rnd(bud),
       income:rnd(inc), health:rnd(hlth), existing:rnd(ex),
       tobacco: Math.random()<0.22?"yes":"no",
       gender: rnd(["male","female"]),
+      productType: rnd(["term","whole","iul","mortgage","dontknow"]),
+      likelihood: rnd(["ready","ready","soon","comparing","researching"]),
       military: Math.random()<0.2?(Math.random()<0.7?"me":"spouse"):"no",
       dependents: rnd(["0","1","2","3+"]),
-      anyday, days: anyday?[]:DAYS.filter(()=>Math.random()<0.5).map(d=>d[0]), emailfirst: Math.random()<0.2
+      anytime, times: anytime?[]:TIMES.filter(()=>Math.random()<0.5).map(d=>d[0]), emailfirst: Math.random()<0.2
     };
     const score=scoreLead(a);
     const type=rnd(types);
@@ -678,7 +686,7 @@ views.home=()=>`
     ${[
       ["ph-gauge","Purchase-intent scoring","Every lead gets a transparent A–D score so you spend your time (and money) on the hottest prospects first."],
       ["ph-shield-check","Automated license checks","Get verified against the NIPR Producer Database automatically — approved or denied with a clear reason. No manual review."],
-      ["ph-tag","Fair, real-market pricing","Tiered pricing benchmarked to top vendors: shared, exclusive, live-transfer and aged — priced by intent and freshness."],
+      ["ph-tag","Fair, real-market pricing","Every lead is exclusive to you — never shared. Tiered pricing (exclusive, live-transfer, aged) by intent and freshness."],
       ["ph-handshake","Carrier matching","1–3 best-fit carriers recommended per lead, from final expense to term to IUL — so you quote faster."],
       ["ph-funnel","Filter &amp; bulk-buy","Filter by category, freshness, tier, state and price — then buy one lead or a hundred in a single click."],
       ["ph-seal-check","Consent-verified","Every lead opted in through our survey with documented TCPA consent — real people who asked to hear from an agent."]
@@ -690,17 +698,14 @@ views.home=()=>`
   <div class="section-head"><div class="eyebrow">Lead pricing</div><h2>Fair, transparent lead pricing</h2>
   <p>Benchmarked to the 2025–26 market (ActiveProspect, EverQuote, SmartFinancial, MADLeadFlow). Every price is built from three factors — see <a href="#pricing-how">how we price</a> below.</p></div>
   <div class="price-grid">
-    <div class="price-card"><h3>Aged</h3><div class="amt">$1<span>–14</span></div>
-      <ul><li>8–180+ days old</li><li>High volume, lowest cost</li><li><b>Best for</b> dialers &amp; nurture</li><li>Older = cheaper</li></ul>
-      <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
-    <div class="price-card pop"><div class="tag">MOST POPULAR</div><h3>Shared</h3><div class="amt">$10<span>–25</span></div>
-      <ul><li>Real-time, sold to 3–5 agents</li><li>Strong value per dollar</li><li><b>Best for</b> active producers</li><li>Full survey + score</li></ul>
+    <div class="price-card pop"><div class="tag">EXCLUSIVE TO YOU</div><h3>Exclusive</h3><div class="amt">$30<span>–75</span></div>
+      <ul><li>Real-time, sold to <b>you only</b></li><li>Never shared with other agents</li><li><b>Best for</b> closers</li><li>Full survey + score + carrier match</li></ul>
       <button class="btn btn-primary" style="width:100%" onclick="startOnboard()">Browse</button></div>
-    <div class="price-card"><h3>Exclusive</h3><div class="amt">$30<span>–75</span></div>
-      <ul><li>Sold to <b>you only</b></li><li>2–3× higher conversion</li><li><b>Best for</b> closers</li><li>Carrier match included</li></ul>
-      <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
     <div class="price-card"><h3>Live Transfer</h3><div class="amt">$48<span>–100</span></div>
-      <ul><li>Warm call, on the line now</li><li>Highest intent</li><li><b>Best for</b> phone closers</li><li>AI pre-qualified</li></ul>
+      <ul><li>Warm call, on the line now</li><li>Highest intent · exclusive</li><li><b>Best for</b> phone closers</li><li>AI pre-qualified</li></ul>
+      <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
+    <div class="price-card"><h3>Aged</h3><div class="amt">$1<span>–14</span></div>
+      <ul><li>8–180+ days old · still exclusive</li><li>High volume, lowest cost</li><li><b>Best for</b> dialers &amp; nurture</li><li>Older = cheaper</li></ul>
       <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
   </div>
 
@@ -708,7 +713,7 @@ views.home=()=>`
     <h3 style="font-size:19px;margin-bottom:6px"><i class="ph-duotone ph-calculator" style="color:var(--teal)"></i> How we price every lead</h3>
     <p style="color:var(--muted);font-size:14.5px;margin-bottom:14px">A lead's price isn't arbitrary. It's calculated from three things, then benchmarked against what real vendors charge so you never overpay:</p>
     <div class="grid-3" style="gap:16px">
-      <div><b>1 · Lead type</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How exclusive and how warm it is. A live transfer (a prospect on the phone right now) is worth far more than an aged shared lead. Type sets the base price: <b>Aged &lt; Shared &lt; Exclusive &lt; Live Transfer</b>.</p></div>
+      <div><b>1 · Lead type</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How warm it is. Every lead is <b>exclusive to the agent who buys it</b> — never shared. A live transfer (a prospect on the phone right now) is worth more than an aged one. Type sets the base price: <b>Aged &lt; Exclusive &lt; Live Transfer</b>.</p></div>
       <div><b>2 · Intent tier (A–D)</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">Our 0–100 purchase-intent score. A <b>Tier A</b> lead (ready now, real budget, coverage gap) converts several times better than a Tier D, so it costs more. You're paying for likelihood-to-close, not just contact info.</p></div>
       <div><b>3 · Freshness</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How long ago the survey was filled out. Fresh leads (0–7 days) carry full price; aged leads are discounted the older they get (down to ~35% at 90+ days) because response rates fall over time.</p></div>
     </div>
@@ -789,6 +794,7 @@ let SV={step:0,a:{}};
 const SVQ=[
   {k:"timeframe",t:"When are you hoping to have coverage in place?",h:"Be honest — there's no wrong answer.",o:[["asap","As soon as possible"],["30days","Within 30 days"],["90days:","In the next few months"],["researching","Just researching for now"]]},
   {k:"coverage",t:"How much coverage are you looking for?",h:"Even a small policy can cover funeral costs and final bills — there's no amount too small.",o:[["5-10k","$5,000 – $10,000"],["10-20k","$10,000 – $20,000"],["20-35k","$20,000 – $35,000"],["35-50k","$35,000 – $50,000"],["50-100k","$50,000 – $100,000"],["100-200k","$100,000 – $200,000"],["200k+","$200,000+"]]},
+  {k:"productType",t:"What type of life insurance are you looking for?",h:"Not sure? That's completely fine — your agent will recommend the best fit.",o:[["term","Term life (lower cost, set period)"],["whole","Whole life / final expense (lifetime, builds value)"],["iul","Universal / IUL (flexible, cash value)"],["mortgage","Mortgage protection"],["dontknow","I'm not sure / I don't know"]]},
   {k:"who",t:"Who is this coverage for?",h:"",o:[["self","Myself"],["spouse","My spouse / partner"],["child","A child or grandchild"],["parent","A parent"],["family","My whole family"],["other","Someone else"]]},
   {k:"dependents",t:"How many people depend on your income?",h:"This helps size the right coverage.",o:[["0","Just me"],["1","1 person"],["2","2 people"],["3+","3 or more"]]},
   {k:"trigger",t:"What's prompting you to look now?",h:"This helps us match the right policy.",o:[["newbaby","New baby / growing family"],["mortgage","Mortgage / home"],["marriage","Marriage / partner"],["finalexpense","Cover funeral / final expenses"],["business","Business or key-person need"],["debt","Debt / income protection"],["none","No specific reason"]]},
@@ -803,7 +809,9 @@ const SVQ=[
   {k:"existingCarrier",t:"Who is your current coverage with?",h:"It's okay if you're not 100% sure — but please have this ready when your agent calls, so we don't waste your time.",o:[["mutualofomaha","Mutual of Omaha"],["statefarm","State Farm"],["newyorklife","New York Life"],["northwestern","Northwestern Mutual"],["massmutual","MassMutual"],["globe","Globe Life"],["colonialpenn","Colonial Penn"],["aarp","AARP / NY Life"],["other","Another carrier"],["dontknow","I don't know"]],when:a=>a.existing && a.existing!=="none"},
   {k:"existingAmount",t:"About how much coverage do you currently have?",h:"A rough idea is perfectly fine — just try to have the exact figure for your agent.",o:[["<10k","Under $10,000"],["10-25k","$10,000 – $25,000"],["25-50k","$25,000 – $50,000"],["50-100k","$50,000 – $100,000"],["100k+","$100,000+"],["dontknow","I don't know"]],when:a=>a.existing && a.existing!=="none"},
   {k:"income",t:"What's your approximate household income?",h:"This lets your agent find a premium that comfortably fits your budget.",o:[["150k+","$150,000+ / year"],["100-150k","$100,000 – $150,000"],["60-100k","$60,000 – $100,000"],["40-60k","$40,000 – $60,000"],["25-40k","$25,000 – $40,000"],["15-25k","$15,000 – $25,000"],["<15k","Under $15,000"]]},
-  {k:"contact",t:"When's the best time for a licensed agent to reach you?",h:"Most agents will give you a quick call. Pick any days that work.",type:"contact"}
+  {k:"likelihood",t:"If a licensed agent calls with a plan that fits your budget, how likely are you to put coverage in place?",h:"Be honest — it just helps us match you with the right advisor.",o:[["ready","Very likely — I'm ready to get covered"],["soon","Likely, in the next few weeks"],["comparing","I'm comparing options / getting quotes"],["researching","Just researching for now"]]},
+  {k:"contact",t:"What time of day is best to reach you?",h:"Pick any that work. Times are in your local time zone.",type:"contact"},
+  {k:"notes",t:"Anything else your agent should know? (optional)",h:"For example: \"I work until 6pm,\" \"call my cell,\" or specific questions you have.",type:"text"}
 ];
 function activeQs(){ return SVQ.filter(q=>!q.when || q.when(SV.a)); }
 views.survey=()=>{
@@ -817,16 +825,19 @@ views.survey=()=>{
       ${q.type==="number"
         ? `<input id="sv_num" type="number" min="18" max="85" placeholder="Enter age" style="padding:14px;border:1.5px solid var(--line);border-radius:12px;width:100%;font-size:17px">`
         : q.type==="contact"
-        ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${DAYS.map(d=>`<div class="opt ${(SV.a.days||[]).includes(d[0])?'sel':''}" style="padding:11px 16px;flex:0 0 auto;justify-content:center" onclick="svToggleDay('${d[0]}')">${d[1]}</div>`).join("")}</div>
-           <label class="opt ${SV.a.anyday?'sel':''}" style="margin-bottom:8px" onclick="svToggleAny();event.preventDefault()"><span class="rad"></span> Any day works for me</label>
+        ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${TIMES.map(d=>`<div class="opt ${(SV.a.times||[]).includes(d[0])?'sel':''}" style="padding:11px 16px;flex:0 0 auto;justify-content:center" onclick="svToggleTime('${d[0]}')">${d[1]}</div>`).join("")}</div>
+           <label class="opt ${SV.a.anytime?'sel':''}" style="margin-bottom:8px" onclick="svToggleAnytime();event.preventDefault()"><span class="rad"></span> Any time of day works for me</label>
            <label class="opt ${SV.a.emailfirst?'sel':''}" onclick="svToggleEmail();event.preventDefault()"><span class="rad"></span> I'd prefer to be emailed first</label>
            <div class="qh" style="margin-top:10px">Your phone number is collected on the next step.</div>`
+        : q.type==="text"
+        ? `<textarea id="sv_text" rows="4" placeholder="Type anything helpful here (optional)…" style="padding:13px;border:1.5px solid var(--line);border-radius:12px;width:100%;font-size:15px;font-family:inherit;resize:vertical">${SV.a.notes||''}</textarea>`
         : `<div class="opts">${q.o.map(o=>`<div class="opt ${SV.a[q.k]===o[0]?'sel':''}" onclick="pickSurvey('${q.k}','${o[0]}')"><span class="rad"></span>${o[1]}</div>`).join("")}</div>`}
       </div>
       <div style="display:flex;justify-content:space-between;margin-top:8px">
         <button class="btn btn-outline" ${SV.step===0?'disabled':''} onclick="svBack()">← Back</button>
         ${q.type==="number"?`<button class="btn btn-teal" onclick="svNumNext()">Continue →</button>`:``}
         ${q.type==="contact"?`<button class="btn btn-teal" onclick="svContactNext()">Continue →</button>`:``}
+        ${q.type==="text"?`<button class="btn btn-teal" onclick="svTextNext()">Finish →</button>`:``}
       </div>
     </div>
   </div>`;
@@ -1008,7 +1019,7 @@ function editPrefs(){
   modal("Lead preferences",`
     <p style="color:var(--muted);margin-bottom:14px">New leads matching these are auto-surfaced on your dashboard. Matches are always limited to states you're licensed in (set those in <a onclick="closeModal();nav('profile')">My Profile</a>).</p>
     <div class="field"><label>Intent tiers</label><div style="display:flex;gap:16px;flex-wrap:wrap">${['A','B','C','D'].map(t=>`<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" class="pr_tier" value="${t}" ${p.tiers.includes(t)?'checked':''}> Tier ${t}</label>`).join("")}</div></div>
-    <div class="field"><label>Lead types</label><div style="display:flex;gap:16px;flex-wrap:wrap">${[['exclusive','Exclusive'],['shared','Shared'],['livetransfer','Live transfer'],['aged','Aged']].map(t=>`<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" class="pr_type" value="${t[0]}" ${p.types.includes(t[0])?'checked':''}> ${t[1]}</label>`).join("")}</div></div>
+    <div class="field"><label>Lead types</label><div style="display:flex;gap:16px;flex-wrap:wrap">${[['exclusive','Exclusive'],['livetransfer','Live transfer'],['aged','Aged']].map(t=>`<label style="display:flex;gap:6px;align-items:center;font-weight:600"><input type="checkbox" class="pr_type" value="${t[0]}" ${p.types.includes(t[0])?'checked':''}> ${t[1]}</label>`).join("")}</div></div>
     <div class="field"><label>Max price per lead</label><input id="pr_max" type="number" value="${p.maxPrice||''}" placeholder="No limit"></div>
     <button class="btn btn-teal" style="width:100%" onclick="savePrefs()">Save preferences</button>
   `);
@@ -1043,7 +1054,6 @@ function marketplace(){
     <select onchange="setFilter('type',this.value)" title="Delivery type"><option value="">All types</option>
       <option value="livetransfer" ${MFILTER.type==='livetransfer'?'selected':''}>Live transfer</option>
       <option value="exclusive" ${MFILTER.type==='exclusive'?'selected':''}>Exclusive</option>
-      <option value="shared" ${MFILTER.type==='shared'?'selected':''}>Shared</option>
       <option value="aged" ${MFILTER.type==='aged'?'selected':''}>Aged</option></select>
     <select onchange="setFilter('fresh',this.value)" title="How long ago the survey was filled out"><option value="">All ages (freshness)</option>${FRESH_BUCKETS.map(b=>`<option value="${b[0]}" ${MFILTER.fresh===b[0]?'selected':''}>${b[1]}</option>`).join("")}</select>
     <select onchange="setFilter('tier',this.value)"><option value="">All tiers</option><option ${MFILTER.tier==='A'?'selected':''}>A</option><option ${MFILTER.tier==='B'?'selected':''}>B</option><option ${MFILTER.tier==='C'?'selected':''}>C</option><option ${MFILTER.tier==='D'?'selected':''}>D</option></select>
@@ -1083,13 +1093,13 @@ function bulkBuyConfirm(n){
   const total=list.reduce((s,l)=>s+l.price,0);
   if(getBalance()<total){ closeModal(); openAddFunds(); return; }
   SESSION.purchased=SESSION.purchased||[];
-  list.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:l.price,status:'new',snapshot:l,boughtAt:Date.now()}); if(l.type==='exclusive'||l.type==='livetransfer'){ l.exclusiveSoldTo=SESSION.id; } });
+  list.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:l.price,status:'new',snapshot:l,boughtAt:Date.now()}); l.exclusiveSoldTo=SESSION.id; });
   chargeWallet(total, `Bulk purchase — ${list.length} leads`);
   persistSession(); DB.set('leads',LEADS);
   closeModal(); nav('myleads');
 }
 function leadCard(l,owned){
-  const labelType={livetransfer:"Live Transfer",exclusive:"Exclusive",shared:"Shared",aged:"Aged "+l.daysAgo+"d"}[l.type];
+  const labelType={livetransfer:"Live Transfer",exclusive:"Exclusive",shared:"Exclusive",aged:"Aged "+l.daysAgo+"d"}[l.type];
   return `<div class="lead-card" onclick="openLead('${l.id}',${owned})">
     <div class="lead-top">
       <div><div class="lead-name">${owned?l.first+" "+l.last:l.first+" "+l.last[0]+"."}</div>
@@ -1485,13 +1495,13 @@ function surveyAsText(){
 }
 function copySurveyText(){ navigator.clipboard?.writeText(surveyAsText()).then(()=>{const b=document.getElementById('svTextBtn');if(b){b.innerHTML='<i class="ph-bold ph-check"></i> Copied!';setTimeout(()=>b.innerHTML='<i class="ph-bold ph-clipboard-text"></i> Copy survey text',1800);}}); }
 function ownerExportCSV(){
-  const cols=["Created","First","Last","Phone","Email","State","ZIP","Age","Category","Tier","Score","Type","Freshness","DaysAgo","Coverage","Dependents","Trigger","Military","Branch","Income","Gender","Health","Conditions","Tobacco","Existing","BestTime","Source","Consent","ConsentAt","Price","Status"];
+  const cols=["Created","First","Last","Phone","Email","State","ZIP","Age","Category","Tier","Score","PurchaseIntent","InsuranceType","Type","Freshness","DaysAgo","Coverage","Dependents","Trigger","Military","Branch","Income","Gender","Health","Conditions","Tobacco","Existing","BestTime","Notes","Source","Consent","ConsentAt","Price","Status"];
   const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;
   const rows=ownerLeadList(LEADS).map(l=>[
     l.createdAt?new Date(l.createdAt).toLocaleString():"", l.first, l.last, l.phone, l.email, l.state, l.zip||"", l.a.age,
-    l.category||categorize(l.a), l.score.tier, l.score.score, l.type, freshLabel(l), leadDays(l),
+    l.category||categorize(l.a), l.score.tier, l.score.score, l.a.likelihood||"", l.a.productType||"", l.type, freshLabel(l), leadDays(l),
     covLabel(l.a.coverage), l.a.dependents||"", trigLabel(l.a.trigger), l.a.military||"no", l.a.branch||"",
-    l.a.income, l.a.gender||"", l.a.health, l.a.conditions||"", l.a.tobacco, l.a.existing, contactLabel(l.a),
+    l.a.income, l.a.gender||"", l.a.health, l.a.conditions||"", l.a.tobacco, l.a.existing, contactLabel(l.a), l.a.notes||"",
     l.source||"", l.consent?.given?"Yes":"No", l.consent?.at||"", l.price, l.status
   ].map(esc).join(","));
   const csv=[cols.join(","),...rows].join("\n");
@@ -1548,7 +1558,17 @@ function ownerSubmissions(){
     <div class="stat"><div class="lab">Total submissions</div><div class="val">${all.length}</div></div>
     <div class="stat"><div class="lab">Today</div><div class="val">${today}</div><div class="delta up">fresh</div></div>
     <div class="stat"><div class="lab">This week</div><div class="val">${wk}</div></div>
-    <div class="stat"><div class="lab">Top category</div><div class="val" style="font-size:20px">${topCat?topCat[0]:'—'}</div><div class="delta">${topCat?topCat[1]+' leads':''}</div></div>
+    <div class="stat"><div class="lab">Policies placed</div><div class="val" style="color:var(--good)">${placements().length}</div><div class="delta up">sold</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px;border-left:3px solid var(--good)">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin-bottom:2px"><i class="ph-duotone ph-seal-check" style="color:var(--good)"></i> Recent policies placed</h3>
+      <span class="picker-count">${placements().length} total</span></div>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:10px">Every time an agent marks a sale, it logs here (and pops site-wide). Shows carrier, lead type, and annual premium.</p>
+    ${placements().length? `<div style="display:grid;gap:8px">${placements().slice(0,8).map(p=>`<div class="callrow" style="background:var(--sand);color:var(--ink)">
+      <i class="ph-bold ph-seal-check" style="color:var(--good);font-size:18px"></i>
+      <div class="meta" style="flex:1"><b>${p.carrier}</b> · ${p.state}<br><small style="color:var(--muted)">${((p.freshTag||'')+' '+(p.category||'life')).trim()} lead${p.ap?' · $'+(+p.ap).toLocaleString()+'/yr AP':''}</small></div>
+    </div>`).join('')}</div>` : `<div class="empty" style="padding:20px"><div class="ic"><i class="ph-duotone ph-seal-check"></i></div><p>No policies logged yet. They'll appear here when agents mark sales.</p></div>`}
   </div>
 
   <div class="card" style="margin-bottom:14px">
@@ -1860,10 +1880,11 @@ function doSignup(){
 function pickSurvey(k,v){ SV.a[k]=v; render('survey'); setTimeout(()=>{ SV.step++; render('survey'); },180); }
 function svNumNext(){ const n=val('sv_num'); if(!n){alert('Please enter your age.');return;} SV.a.age=+n; SV.step++; render('survey'); }
 function svBack(){ if(SV.step>0){SV.step--; render('survey');} }
-function svToggleDay(d){ SV.a.days=SV.a.days||[]; const i=SV.a.days.indexOf(d); if(i>=0)SV.a.days.splice(i,1); else{ SV.a.days.push(d); SV.a.anyday=false; } render('survey'); }
-function svToggleAny(){ SV.a.anyday=!SV.a.anyday; if(SV.a.anyday)SV.a.days=[]; render('survey'); }
+function svToggleTime(t){ SV.a.times=SV.a.times||[]; const i=SV.a.times.indexOf(t); if(i>=0)SV.a.times.splice(i,1); else{ SV.a.times.push(t); SV.a.anytime=false; } render('survey'); }
+function svToggleAnytime(){ SV.a.anytime=!SV.a.anytime; if(SV.a.anytime)SV.a.times=[]; render('survey'); }
+function svTextNext(){ const t=document.getElementById('sv_text'); if(t) SV.a.notes=t.value.trim(); SV.step++; render('survey'); }
 function svToggleEmail(){ SV.a.emailfirst=!SV.a.emailfirst; render('survey'); }
-function svContactNext(){ if(!SV.a.anyday && !(SV.a.days&&SV.a.days.length) && !SV.a.emailfirst){ alert('Please pick at least one day, "any day," or "email me first."'); return; } SV.step++; render('survey'); }
+function svContactNext(){ if(!SV.a.anytime && !(SV.a.times&&SV.a.times.length) && !SV.a.emailfirst){ alert('Please pick a time of day, "any time," or "email me first."'); return; } SV.step++; render('survey'); }
 function submitSurvey(){
   const first=val('c_first'), last=val('c_last'), phone=val('c_phone'), email=val('c_email'), state=val('c_state'), zip=val('c_zip');
   const consent=document.getElementById('c_consent')?.checked;
@@ -1876,7 +1897,7 @@ function submitSurvey(){
   if(!consent){ err.innerHTML=`<div class="alert bad">Please check the consent box — a licensed agent can only contact you with your permission.</div>`; return; }
   const a=SV.a, sc=scoreLead(a);
   const L={ id:"L"+Date.now(), first, last, state, zip,
-    phone, email, a, score:sc, type:sc.tier==="A"?"exclusive":"shared", daysAgo:0, status:"new", recs:recommend(a),
+    phone, email, a, score:sc, type:"exclusive", daysAgo:0, status:"new", recs:recommend(a),
     category:categorize(a), createdAt:Date.now(), source:"Web opt-in survey",
     consent:{ given:true, at:new Date().toISOString(),
       method:"Web form — TCPA prior express written consent",
@@ -1936,7 +1957,7 @@ function confirmBuy(id){
   SESSION.purchased=SESSION.purchased||[];
   SESSION.purchased.push({id:l.id,paid:l.price,status:"new",snapshot:l,boughtAt:Date.now()});
   chargeWallet(l.price, `Lead: ${l.first} ${l.last[0]}. · ${l.state} · Tier ${l.score.tier}`);
-  if(l.type==="exclusive"||l.type==="livetransfer"){ l.exclusiveSoldTo=SESSION.id; }
+  l.exclusiveSoldTo=SESSION.id;  // every purchase is exclusive — gone from the marketplace for everyone else
   persistSession(); DB.set('leads',LEADS);
   closeModal(); nav('myleads');
 }
@@ -2030,7 +2051,9 @@ function openLead(id,owned){
     <h3 style="margin:18px 0 8px;font-size:16px">Recommended carriers (${l.recs.length})</h3>
     <div class="recs">${l.recs.map(r=>`<div class="rec"><h4>${r.name}</h4><div class="prod">${r.prod}</div><p>${r.why}</p></div>`).join("")}</div>
     <h3 style="margin:18px 0 8px;font-size:16px">Survey snapshot</h3>
+    ${l.a.likelihood?`<div class="alert ${l.a.likelihood==='ready'?'ok':l.a.likelihood==='researching'?'bad':''}" style="display:flex;align-items:center;gap:8px;font-size:13.5px;padding:10px 12px;margin-bottom:10px"><i class="ph-bold ph-target"></i> <span><b>Self-rated intent:</b> ${({ready:'Very likely to buy — ready to get covered',soon:'Likely within a few weeks',comparing:'Comparing options / getting quotes',researching:'Just researching for now'})[l.a.likelihood]||l.a.likelihood}</span></div>`:''}
     <div class="chips">
+      <span class="chip b">Wants: ${({term:'Term',whole:'Whole / Final Expense',iul:'Universal / IUL',mortgage:'Mortgage Protection',dontknow:'Not sure'})[l.a.productType]||'Not sure'}</span>
       <span class="chip">Timeframe: ${({asap:'ASAP','30days':'30 days','90days:':'few months',researching:'researching'})[l.a.timeframe]||l.a.timeframe}</span>
       <span class="chip">Coverage: ${covLabel(l.a.coverage)}</span><span class="chip">Income: ${l.a.income}</span>
       <span class="chip b">Age: ${l.a.age}</span><span class="chip b">Gender: ${l.a.gender||'—'}</span>
@@ -2039,6 +2062,7 @@ function openLead(id,owned){
       ${l.a.military&&l.a.military!=='no'?`<span class="chip">Veteran: ${l.a.military}${l.a.branch?' ('+l.a.branch+')':''}</span>`:''}
       <span class="chip b">Existing: ${l.a.existing}</span><span class="chip b">Best time: ${contactLabel(l.a)}</span>
     </div>
+    ${l.a.notes?`<div class="note" style="margin-top:10px"><i class="ph-bold ph-note-pencil"></i> <b>Client note:</b> "${l.a.notes}"</div>`:''}
     ${estMonthlyPremium(l.a)!=null?`<div class="note info" style="margin-top:10px"><i class="ph-bold ph-calculator"></i> <b>Est. premium:</b> ~$${estMonthlyPremium(l.a)}/mo for ${covLabel(l.a.coverage)} (rough whole-life estimate — quote to confirm).</div>`:''}
     <div style="margin-top:18px">${
       isOwned
