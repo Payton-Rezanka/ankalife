@@ -13,6 +13,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AnkaLife">
+<!-- Supabase client (backend: auth, database, realtime) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Distinctive typography + premium icon set (frontend-design principles, not generic AI defaults) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -314,6 +316,50 @@ const DB = {
   set(k,v){ localStorage.setItem('anka_'+k, JSON.stringify(v)) }
 };
 let SESSION = DB.get('session', null);
+
+/* ============================================================
+   SUPABASE BACKEND
+   ============================================================ */
+const SB_URL = "https://jeevabvrjiqrkiypznzz.supabase.co";
+const SB_KEY = "sb_publishable_VW2LFgfYfzHnygd7_fxVbw_bTM9fQoV";
+const sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+let CLOUD_LEADS = [];   // masked leads pulled from the cloud (shared across all devices)
+
+/* Insert a freshly-submitted survey lead into the shared cloud database */
+async function cloudInsertLead(L){
+  if(!sb) return;
+  try{
+    await sb.from('leads').insert({
+      first:L.first, last:L.last, state:L.state, zip:L.zip, phone:L.phone, email:L.email,
+      answers:L.a, score:L.score.score, tier:L.score.tier, factors:L.score.factors, recs:L.recs,
+      category:L.category, type:L.type, days_ago:0, price:L.price,
+      consent:L.consent, source:L.source||'Web opt-in survey', status:'new'
+    });
+  }catch(e){ console.warn('cloud insert failed', e); }
+}
+/* Map a masked cloud row (leads_market view) to the app's lead shape */
+function mapCloudLead(r){
+  return { id:'C'+r.id, cloudId:r.id, cloud:true,
+    first:r.first_initial||'New', last:(r.last_initial||'P')+'.', state:r.state, city:'—',
+    phone:'(unlocks on purchase)', email:'(unlocks on purchase)',
+    a:r.answers||{}, score:{tier:r.tier, score:r.score, factors:r.factors||[]}, recs:r.recs||[{name:'—',prod:'—',why:''}],
+    category:r.category, type:r.type||'shared', daysAgo:r.days_ago||0, price:r.price||0,
+    consent:{given:r.consent_given===true||r.consent_given==='true'}, source:'Web opt-in (cloud)',
+    status:r.status||'new', createdAt:r.created_at?new Date(r.created_at).getTime():Date.now() };
+}
+/* Pull shared leads from the cloud and merge them into the in-memory list */
+async function loadCloudLeads(){
+  if(!sb) return;
+  try{
+    const { data, error } = await sb.from('leads_market').select('*').order('created_at',{ascending:false}).limit(500);
+    if(error){ console.warn('cloud read', error); return; }
+    CLOUD_LEADS = (data||[]).map(mapCloudLead);
+    // merge into LEADS (dedupe by id), keeping local demo leads too
+    const ids=new Set(LEADS.map(l=>l.id));
+    CLOUD_LEADS.forEach(cl=>{ if(!ids.has(cl.id)) LEADS.unshift(cl); });
+    const r=DB.get('route','home'); if(['marketplace','submissions','dashboard'].includes(r)) render(r);
+  }catch(e){ console.warn('loadCloudLeads', e); }
+}
 
 /* ---------- Reference data ---------- */
 const STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
@@ -1702,6 +1748,7 @@ function submitSurvey(){
   L.price=priceLead(L);
   const refAgent=attributeReferral(L);
   LEADS.unshift(L); DB.set('leads',LEADS); DB.set('ref',null);
+  cloudInsertLead(L);   // <-- write the real lead to the shared cloud database
   SV={step:0,a:{}};
   document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
     <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">You're all set, ${first}!</h1>
@@ -2009,6 +2056,7 @@ function filterList(inp,sel){const q=inp.value.toLowerCase();document.querySelec
 render(DB.get('route','home'));
 seedPlacements();
 startSocialProof();
+loadCloudLeads();   // pull shared leads from Supabase and merge in
 
 /* ---------- PWA: service worker + install ---------- */
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
