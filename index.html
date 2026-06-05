@@ -735,13 +735,16 @@ function footer(){return `<footer class="ft"><div style="max-width:1000px;margin
 views.login=()=>`
 <div class="container" style="max-width:460px">
   <div class="form-card">
-    <h1 style="font-size:24px;margin-bottom:4px">Log in or sign up</h1>
-    <p style="color:var(--muted);margin-bottom:20px">Enter your email and we'll send a secure one-tap login link — no password to remember.</p>
+    <h1 style="font-size:24px;margin-bottom:4px">Log in</h1>
+    <p style="color:var(--muted);margin-bottom:20px">Sign in with your email and password.</p>
     <div id="loginErr"></div>
     <div class="field"><label>Email</label><input id="li_email" type="email" placeholder="you@agency.com"></div>
-    <button class="btn btn-teal" style="width:100%" onclick="sendMagicLink()"><i class="ph ph-envelope-simple"></i> Email me a secure login link</button>
+    <div class="field"><label>Password</label><input id="li_pass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn btn-teal" style="width:100%" onclick="doLogin()">Log in</button>
+    <div style="display:flex;align-items:center;gap:12px;margin:16px 0;color:var(--muted);font-size:13px"><span style="flex:1;height:1px;background:var(--line)"></span>or<span style="flex:1;height:1px;background:var(--line)"></span></div>
+    <button class="btn btn-outline" style="width:100%" onclick="sendMagicLink()"><i class="ph ph-envelope-simple"></i> Email me a one-time login link</button>
     <div id="magicMsg"></div>
-    <p style="text-align:center;margin-top:16px;font-size:13.5px;color:var(--muted)">New agent? Use the same email above — you'll set up your license right after you log in.</p>
+    <p style="text-align:center;margin-top:16px;font-size:13.5px;color:var(--muted)">New agent? <a onclick="startOnboard()">Sign up here</a>.</p>
     <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
       <p style="font-size:11.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:800;margin-bottom:10px">Just exploring? Local demo (no account)</p>
       <button class="btn btn-outline" style="width:100%" onclick="oneTap('agent')"><i class="ph-bold ph-user"></i> Open Demo Agent Portal</button>
@@ -1582,10 +1585,19 @@ function bindPublic(route){
 }
 function bindApp(route){ if(route==="aicalls"){ setTimeout(loadVoices,120); } }
 
-function doLogin(){
+async function doLogin(){
   const email=val('li_email'), pass=val('li_pass');
+  const box=document.getElementById('loginErr');
+  if(sb){
+    if(!email||!pass){ box.innerHTML=`<div class="alert bad">Enter your email and password.</div>`; return; }
+    box.innerHTML=`<div class="note info">Signing in…</div>`;
+    const { error } = await sb.auth.signInWithPassword({ email, password:pass });
+    if(error){ box.innerHTML=`<div class="alert bad">${error.message}</div>`; return; }
+    box.innerHTML=`<div class="note info">Signed in — loading your portal…</div>`;
+    return; // onAuthStateChange routes to the portal
+  }
   const acc=findAccount(email);
-  if(!acc||acc.password!==pass){ document.getElementById('loginErr').innerHTML=`<div class="alert bad">Email or password is incorrect.</div>`; return; }
+  if(!acc||acc.password!==pass){ box.innerHTML=`<div class="alert bad">Email or password is incorrect.</div>`; return; }
   SESSION=acc; DB.set('session',acc);
   nav(acc.role==="owner"?"aicalls":"dashboard");
 }
