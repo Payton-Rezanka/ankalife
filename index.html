@@ -248,6 +248,14 @@ footer.ft a{color:#cfe0e6}
 .opt.sel{border-color:var(--teal);background:#eaf6f5}
 .opt .rad{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);flex-shrink:0}
 .opt.sel .rad{border-color:var(--teal);background:var(--teal);box-shadow:inset 0 0 0 3px #fff}
+/* live social-proof toasts (bottom-right) */
+#toast-wrap{position:fixed;right:18px;bottom:18px;z-index:400;display:flex;flex-direction:column;gap:10px;max-width:340px}
+.toast{background:#fff;border:1px solid var(--line);border-left:4px solid var(--good);border-radius:12px;padding:12px 14px;box-shadow:0 14px 34px -10px rgba(8,42,43,.35);font-size:13.5px;opacity:0;transform:translateY(12px);transition:opacity .3s,transform .3s}
+.toast.show{opacity:1;transform:none}
+.toast b{color:var(--ink)}
+.toast .tmeta{color:var(--muted);font-size:12px;margin-top:2px}
+.toast .tic{color:var(--good);font-size:18px;vertical-align:-2px;margin-right:4px}
+@media(max-width:560px){#toast-wrap{left:12px;right:12px;bottom:12px;max-width:none}}
 @media(max-width:920px){
   body::before{display:none} /* drop grain on mobile for performance */
   .nav-inner{flex-wrap:wrap;gap:6px 10px;padding:10px 16px}
@@ -562,49 +570,49 @@ const views={};
 views.home=()=>`
 <section class="hero"><div class="hero-inner">
   <div>
-    <h1>Life insurance leads that <span class="hl">call themselves.</span></h1>
-    <p class="sub">AnkaLife pairs a marketplace of scored, consent-verified life-insurance leads with an AI voice agent that calls, qualifies, handles objections, and books appointments — so policies get written while you sleep.</p>
+    <h1>Exclusive life insurance leads, <span class="hl">ready to close.</span></h1>
+    <p class="sub">AnkaLife is a marketplace of scored, consent-verified life-insurance leads — final expense, term, mortgage protection, veteran and more. Buy one at a time or in bulk, and work prospects who actually asked to be contacted.</p>
     <div class="cta-row">
       <button class="btn btn-primary" onclick="startOnboard()">Join as an Agent →</button>
       <button class="btn btn-ghost" onclick="nav('survey')">I'm shopping for coverage</button>
     </div>
     <div class="trust">
-      <div><b>26+</b> live leads in market</div>
+      <div><b>Fresh + aged</b> leads daily</div>
       <div><b>A–D</b> purchase-intent scoring</div>
       <div><b>50</b> states supported</div>
-      <div><b>24/7</b> AI calling</div>
+      <div><b>100%</b> consent-verified</div>
     </div>
   </div>
   <div class="hero-card">
-    <h4>● AI Caller — Live</h4>
-    <div class="callrow"><span class="dot"></span><div class="meta">Calling <b>Maria Reyes</b> · TX<br><small>Tier A · $500k term · new baby</small></div></div>
-    <div class="callrow"><span class="dot"></span><div class="meta">Booked appt — <b>Robert Carter</b><br><small>Tomorrow 6:00 PM · Final expense</small></div></div>
-    <div class="callrow"><span class="dot" style="background:var(--gold)"></span><div class="meta">Objection handled — <b>"Too expensive"</b><br><small>Re-quoted $34/mo · interest restored</small></div></div>
-    <div style="margin-top:14px;font-size:12.5px;color:#bcd2d8">Soothing, human-sounding voice · DNC &amp; TCPA aware · auto follow-up by SMS + email</div>
+    <h4>● Lead Marketplace — Live</h4>
+    <div class="callrow"><span class="dot"></span><div class="meta"><b>Maria R.</b> · TX · <span style="color:#7fe3b8">Tier A</span><br><small>Final Expense · $20–35k · exclusive</small></div></div>
+    <div class="callrow"><span class="dot"></span><div class="meta"><b>Robert C.</b> · FL · <span style="color:#9fd0e8">Tier B</span><br><small>Mortgage Protection · fresh today</small></div></div>
+    <div class="callrow"><span class="dot" style="background:var(--gold)"></span><div class="meta"><b>James W.</b> · GA · Veteran<br><small>Term · $100–200k · ready now</small></div></div>
+    <div style="margin-top:14px;font-size:12.5px;color:#bcd2d8">Every lead opted in &amp; consent-verified · DNC-aware · scored for intent</div>
   </div>
 </div></section>
 
 <section class="block" id="how"><div class="container">
-  <div class="section-head"><div class="eyebrow">How it works</div><h2>From cold contact to written policy</h2>
-  <p>Two products in one platform: an autonomous AI sales engine for the platform owner, and a self-serve lead marketplace for licensed agents.</p></div>
+  <div class="section-head"><div class="eyebrow">How it works</div><h2>Buy scored leads, write more policies</h2>
+  <p>A self-serve marketplace of consent-verified life-insurance leads for licensed agents.</p></div>
   <div class="steps">
-    <div class="step"><div class="num">1</div><h4>Lead is captured &amp; scored</h4><p>Consumers complete a short survey. We compute a 0–100 purchase-intent score and an A–D tier.</p></div>
-    <div class="step"><div class="num">2</div><h4>Carriers are matched</h4><p>Our engine recommends 1–3 best-fit carriers / product types for each lead automatically.</p></div>
-    <div class="step"><div class="num">3</div><h4>AI agent makes contact</h4><p>A human-sounding voice agent calls, follows the script, rebuts objections, and books the appointment.</p></div>
-    <div class="step"><div class="num">4</div><h4>Agents buy &amp; close</h4><p>Licensed agents purchase scored leads in the marketplace and convert with full context.</p></div>
+    <div class="step"><div class="num">1</div><h4>Get verified</h4><p>Sign up and we check your license automatically against the NIPR Producer Database — instant decision, no waiting.</p></div>
+    <div class="step"><div class="num">2</div><h4>Fund your wallet</h4><p>Add a balance and buy leads instantly — one at a time or in bulk — filtered to your states, categories and budget.</p></div>
+    <div class="step"><div class="num">3</div><h4>Work scored leads</h4><p>Each lead arrives with a 0–100 intent score, full survey detail, and 1–3 best-fit carrier matches.</p></div>
+    <div class="step"><div class="num">4</div><h4>Close &amp; track</h4><p>Call your consent-verified prospects, mark policies placed, and grow your book.</p></div>
   </div>
 </div></section>
 
 <section class="block bg-sand"><div class="container">
-  <div class="section-head"><div class="eyebrow">Built to be robust</div><h2>Everything you need in one place</h2></div>
+  <div class="section-head"><div class="eyebrow">Built for producers</div><h2>Everything you need to buy &amp; close</h2></div>
   <div class="grid-3">
     ${[
-      ["ph-phone-call","Autonomous AI dialing","Owner account runs outbound campaigns 24/7 — calls, SMS, and email follow-ups with a soothing, trustworthy voice."],
-      ["ph-brain","Objection &amp; rebuttal AI","A trained playbook handles price, spouse, 'just researching,' and trust objections to close more leads."],
-      ["ph-gauge","Purchase-intent scoring","Every lead gets a transparent A–D score so you call the hottest prospects first."],
-      ["ph-shield-check","Automated license checks","Agents are verified against the NIPR Producer Database automatically — approved or denied with a clear reason. No manual review."],
-      ["ph-tag","Real-market pricing","Tiered pricing modeled on top vendors: shared, exclusive, live-transfer and aged leads."],
-      ["ph-handshake","Carrier matching","1–3 best-fit carriers recommended per lead, from term to IUL to final expense."]
+      ["ph-gauge","Purchase-intent scoring","Every lead gets a transparent A–D score so you spend your time (and money) on the hottest prospects first."],
+      ["ph-shield-check","Automated license checks","Get verified against the NIPR Producer Database automatically — approved or denied with a clear reason. No manual review."],
+      ["ph-tag","Fair, real-market pricing","Tiered pricing benchmarked to top vendors: shared, exclusive, live-transfer and aged — priced by intent and freshness."],
+      ["ph-handshake","Carrier matching","1–3 best-fit carriers recommended per lead, from final expense to term to IUL — so you quote faster."],
+      ["ph-funnel","Filter &amp; bulk-buy","Filter by category, freshness, tier, state and price — then buy one lead or a hundred in a single click."],
+      ["ph-seal-check","Consent-verified","Every lead opted in through our survey with documented TCPA consent — real people who asked to hear from an agent."]
     ].map(c=>`<div class="card feature"><div class="ic"><i class="ph-duotone ${c[0]}"></i></div><h3>${c[1]}</h3><p>${c[2]}</p></div>`).join("")}
   </div>
 </div></section>
@@ -637,7 +645,7 @@ views.home=()=>`
     </div>
     <div class="note info" style="margin-top:14px"><b>The formula:</b> <code>price = base(type) × tier(A–D) × freshness</code>. Example: a Tier A exclusive lead is ~$75; the same profile as an aged 90+ day lead drops to a few dollars. <b>Why this way?</b> It ties every dollar you spend to expected ROI — you pay the most only for the leads most likely to become a written policy, and pay pennies for bulk aged leads to feed a dialer.</div>
   </div>
-  <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:18px">Owner account is not charged per lead — it runs the AI sales engine that generates and works the pipeline.</p>
+  <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:18px">No subscriptions or contracts — fund your wallet and pay only for the leads you choose.</p>
 </div></section>
 
 <section class="block bg-sand"><div class="container" style="max-width:760px;text-align:center">
@@ -650,8 +658,8 @@ function startOnboard(){ OB={step:0,a:{states:[],carriers:[]}}; nav('onboard'); 
 
 function footer(){return `<footer class="ft"><div style="max-width:1000px;margin:0 auto">
   <div class="logo" style="justify-content:center;color:#fff;margin-bottom:10px"><span class="mark">A</span> AnkaLife</div>
-  <p>AI life-insurance lead platform · marketplace + autonomous AI sales engine.</p>
-  <p style="margin-top:10px;font-size:12px;color:#7e98a0">Demo build for evaluation. Compliance note: live AI calling requires TCPA-compliant prior express written consent, internal &amp; national DNC scrubbing, and state insurance licensure. See the included Compliance &amp; Startup packet.</p>
+  <p>The marketplace for scored, consent-verified life-insurance leads.</p>
+  <p style="margin-top:10px;font-size:12px;color:#7e98a0">Demo build for evaluation. Every lead is collected with TCPA-compliant prior express written consent. Agents are responsible for DNC scrubbing and maintaining active state licensure.</p>
 </div></footer>`}
 
 /* ---------- Auth views ---------- */
@@ -713,7 +721,7 @@ let SV={step:0,a:{}};
 const SVQ=[
   {k:"timeframe",t:"When are you hoping to have coverage in place?",h:"Be honest — there's no wrong answer.",o:[["asap","As soon as possible"],["30days","Within 30 days"],["90days:","In the next few months"],["researching","Just researching for now"]]},
   {k:"coverage",t:"How much coverage are you looking for?",h:"Even a small policy can cover funeral costs and final bills — there's no amount too small.",o:[["5-10k","$5,000 – $10,000"],["10-20k","$10,000 – $20,000"],["20-35k","$20,000 – $35,000"],["35-50k","$35,000 – $50,000"],["50-100k","$50,000 – $100,000"],["100-200k","$100,000 – $200,000"],["200k+","$200,000+"]]},
-  {k:"who",t:"Who is this coverage for?",h:"",o:[["self","Myself"],["spouse","My spouse / partner"],["child","A child or grandchild"],["parent","A parent"],["family","My whole family"]]},
+  {k:"who",t:"Who is this coverage for?",h:"",o:[["self","Myself"],["spouse","My spouse / partner"],["child","A child or grandchild"],["parent","A parent"],["family","My whole family"],["other","Someone else"]]},
   {k:"dependents",t:"How many people depend on your income?",h:"This helps size the right coverage.",o:[["0","Just me"],["1","1 person"],["2","2 people"],["3+","3 or more"]]},
   {k:"trigger",t:"What's prompting you to look now?",h:"This helps us match the right policy.",o:[["newbaby","New baby / growing family"],["mortgage","Mortgage / home"],["marriage","Marriage / partner"],["finalexpense","Cover funeral / final expenses"],["business","Business or key-person need"],["debt","Debt / income protection"],["none","No specific reason"]]},
   {k:"military",t:"Have you or your spouse served in the U.S. military?",h:"Veterans and families may qualify for special programs.",o:[["me","Yes — I served"],["spouse","Yes — my spouse served"],["no","No"]]},
@@ -724,6 +732,8 @@ const SVQ=[
   {k:"conditions",t:"Any of these conditions? (helps us match the right carrier)",h:"",o:[["none","None of these"],["diabetes","Diabetes"],["heart","Heart condition"],["cancer","Cancer history"],["other","Other"]],when:a=>a.health==="fair"||a.health==="poor"},
   {k:"tobacco",t:"Have you used tobacco or nicotine in the last 12 months?",h:"",o:[["no","No"],["yes","Yes"]]},
   {k:"existing",t:"Do you currently have life insurance?",h:"",o:[["none","No coverage"],["some","Some, but not enough"],["old","An old policy I should review"]]},
+  {k:"existingCarrier",t:"Who is your current coverage with?",h:"It's okay if you're not 100% sure — but please have this ready when your agent calls, so we don't waste your time.",o:[["mutualofomaha","Mutual of Omaha"],["statefarm","State Farm"],["newyorklife","New York Life"],["northwestern","Northwestern Mutual"],["massmutual","MassMutual"],["globe","Globe Life"],["colonialpenn","Colonial Penn"],["aarp","AARP / NY Life"],["other","Another carrier"],["dontknow","I don't know"]],when:a=>a.existing && a.existing!=="none"},
+  {k:"existingAmount",t:"About how much coverage do you currently have?",h:"A rough idea is perfectly fine — just try to have the exact figure for your agent.",o:[["<10k","Under $10,000"],["10-25k","$10,000 – $25,000"],["25-50k","$25,000 – $50,000"],["50-100k","$50,000 – $100,000"],["100k+","$100,000+"],["dontknow","I don't know"]],when:a=>a.existing && a.existing!=="none"},
   {k:"income",t:"What's your approximate household income?",h:"This lets your agent find a premium that comfortably fits your budget.",o:[["150k+","$150,000+ / year"],["100-150k","$100,000 – $150,000"],["60-100k","$60,000 – $100,000"],["40-60k","$40,000 – $60,000"],["25-40k","$25,000 – $40,000"],["15-25k","$15,000 – $25,000"],["<15k","Under $15,000"]]},
   {k:"contact",t:"When's the best time for a licensed agent to reach you?",h:"Most agents will give you a quick call. Pick any days that work.",type:"contact"}
 ];
@@ -1437,7 +1447,7 @@ function ownerSubmissions(){
   <div class="card" style="padding:0;overflow:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12.5px;white-space:nowrap">
       <thead><tr style="background:var(--sand);text-align:left">
-        ${["Date","Name","Phone","Email","State","ZIP","Age","Category","Tier","Type","Freshness","Coverage","Deps","Trigger","Military","Income","Budget","Health","Tobacco","Existing","Best time","Source","Consent"].map(h=>`<th style="padding:9px 10px;font-weight:700;position:sticky;top:0;background:var(--sand)">${h}</th>`).join("")}
+        ${["Date","Name","Phone","Email","State","ZIP","Age","Category","Tier","Type","Freshness","Coverage","Deps","Trigger","Military","Income","Gender","Health","Tobacco","Existing","Best time","Source","Consent"].map(h=>`<th style="padding:9px 10px;font-weight:700;position:sticky;top:0;background:var(--sand)">${h}</th>`).join("")}
       </tr></thead>
       <tbody>
       ${list.length? list.map(l=>{const c=l.category||categorize(l.a);return `<tr style="border-top:1px solid var(--line);cursor:pointer" onclick="openLead('${l.id}',true)">
@@ -1457,7 +1467,7 @@ function ownerSubmissions(){
         <td style="padding:8px 10px">${trigLabel(l.a.trigger)}</td>
         <td style="padding:8px 10px">${l.a.military&&l.a.military!=='no'?'✔ '+l.a.military:'—'}</td>
         <td style="padding:8px 10px">${l.a.income}</td>
-        <td style="padding:8px 10px">${l.a.budget}</td>
+        <td style="padding:8px 10px">${l.a.gender||'—'}</td>
         <td style="padding:8px 10px">${l.a.health}</td>
         <td style="padding:8px 10px">${l.a.tobacco}</td>
         <td style="padding:8px 10px">${l.a.existing}</td>
@@ -1480,10 +1490,7 @@ function profile(){
       <div class="field"><label>Full name</label><input id="pf_name" value="${u.name}"></div>
       <div class="field"><label>Email</label><input id="pf_email" value="${u.email}" disabled></div>
     </div>
-    ${owner?'':`<div class="two">
-      <div class="field"><label>NPN</label><input id="pf_npn" value="${u.npn||''}"></div>
-      <div class="field"><label>Resident license #</label><input id="pf_lic" value="${u.licenseNumber||''}"></div>
-    </div>`}
+    <div class="field"><label>NPN (National Producer Number)<span class="hint"> — your license is verified against this</span></label><input id="pf_npn" value="${u.npn||''}" placeholder="e.g. 17428953"></div>
     <div class="field"><label>States licensed</label>
       <div class="checks">${STATES.map(s=>`<label><input type="checkbox" class="pf_st" value="${s}" ${(u.states||[]).includes(s)?'checked':''}> ${s}</label>`).join("")}</div></div>
     <div class="field"><label>Carrier appointments <span class="hint">(${CARRIERS.length} available — type to filter)</span></label>
@@ -1698,8 +1705,16 @@ function submitSurvey(){
   SV={step:0,a:{}};
   document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
     <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">You're all set, ${first}!</h1>
-    <p style="color:var(--muted)">Your information has been sent to ${refAgent?`<b>${refAgent.name}</b>, a`:'a'} licensed, verified agent in ${state}. Expect a call at ${phone} soon. You can opt out anytime by replying STOP.</p>
-    <button class="btn btn-teal" style="margin-top:16px" onclick="nav('home')">Back to home</button></div></div>`;
+    <p style="color:var(--muted)">Your information has been sent to ${refAgent?`<b>${refAgent.name}</b>, a`:'a'} licensed, verified agent in ${state}. Expect a call at ${phone} soon.</p>
+    <div class="alert ok" style="text-align:left;margin-top:16px"><b><i class="ph-bold ph-chat-circle-text"></i> We just texted you a confirmation</b>
+      <p style="font-size:13px;margin-top:6px;font-style:italic;color:#176b48">"${clientConfirmationSMS(first)}"</p></div>
+    <p style="font-size:12px;color:var(--muted);margin-top:10px">A confirmation email is on its way too. You can opt out anytime by replying STOP.</p>
+    <button class="btn btn-teal" style="margin-top:14px" onclick="nav('home')">Back to home</button></div></div>`;
+}
+/* Drafted automated confirmation the client receives right after submitting.
+   (Front-end shows it; real delivery is sent via Twilio/SMS + email from the backend.) */
+function clientConfirmationSMS(first){
+  return `Hi ${first||'there'}, this is AnkaLife — thanks for requesting your life insurance quote! ✅ A licensed agent will call you at your chosen time to go over your options. Have your current policy info handy if you have any. Questions? Just reply here. Reply STOP to opt out.`;
 }
 
 function setFilter(k,v){ MFILTER[k]=v; render('marketplace'); }
@@ -1849,8 +1864,42 @@ function openLead(id,owned){
   `);
 }
 function setLeadStatus(id,s){
+  if(s==='sold'){ recordPolicy(id); return; }
   const p=(SESSION.purchased||[]).find(p=>p.id===id); if(p){p.status=s;persistSession();}
   closeModal(); render(DB.get('route','myleads'));
+}
+/* ---------- Record a placed policy (agent marks client approved/in force) ---------- */
+function recordPolicy(id){
+  const p=(SESSION.purchased||[]).find(x=>x.id===id); const l=p?.snapshot||LEADS.find(x=>x.id===id); if(!l) return;
+  const faces=["$5–10k","$10–20k","$20–35k","$35–50k","$50–100k","$100–200k","$200k+"];
+  modal("Record a placed policy",`
+    <p style="color:var(--muted);margin-bottom:14px">Mark this client as <b>approved &amp; in force</b>. This logs the sale to your book and posts a live "policy placed" notice site-wide (no client details are ever shared).</p>
+    <div class="field"><label>Carrier approved with</label><select id="pol_carrier" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px">${CARRIERS.map(c=>`<option ${l.recs&&l.recs[0]&&l.recs[0].name===c?'selected':''}>${c}</option>`).join("")}</select></div>
+    <div class="two">
+      <div class="field"><label>Product</label><select id="pol_product"><option>Final Expense / Whole Life</option><option>Term Life</option><option>Guaranteed / Simplified Issue</option><option>IUL / Universal Life</option><option>Mortgage Protection</option></select></div>
+      <div class="field"><label>Face amount</label><select id="pol_face">${faces.map(f=>`<option ${covLabel(l.a.coverage)===f?'selected':''}>${f}</option>`).join("")}</select></div>
+    </div>
+    <div class="two">
+      <div class="field"><label>Annual Premium (AP) $</label><input id="pol_ap" type="number" inputmode="numeric" placeholder="e.g. 840"></div>
+      <div class="field"><label>Monthly premium $ <span class="hint">(optional)</span></label><input id="pol_mo" type="number" inputmode="numeric" placeholder="e.g. 70"></div>
+    </div>
+    <div class="field"><label>Carrier app / policy # <span class="hint">(optional)</span></label><input id="pol_num" placeholder="Application number"></div>
+    <button class="btn btn-teal" style="width:100%" onclick="submitPolicy('${id}')"><i class="ph-bold ph-seal-check"></i> Mark policy placed</button>
+  `);
+}
+function submitPolicy(id){
+  const carrier=document.getElementById('pol_carrier').value;
+  const product=document.getElementById('pol_product').value;
+  const face=document.getElementById('pol_face').value;
+  const ap=+val('pol_ap')||0, mo=+val('pol_mo')||0, num=val('pol_num');
+  const p=(SESSION.purchased||[]).find(x=>x.id===id);
+  const l=p?.snapshot||LEADS.find(x=>x.id===id);
+  if(p){ p.status='sold'; p.policy={carrier,product,face,ap,monthly:mo,num,at:Date.now()}; persistSession(); }
+  const gl=LEADS.find(x=>x.id===id); if(gl){ gl.status='sold'; DB.set('leads',LEADS); }
+  addPlacement({state:l?l.state:'US', carrier, face, category:l?(l.category||categorize(l.a)):'life', ap});
+  closeModal();
+  showToast(`<div><i class="ph-bold ph-confetti tic" style="color:var(--gold)"></i><b>Nice work — policy logged!</b></div><div class="tmeta">${face} with ${carrier}${ap?` · $${ap}/yr AP`:''}. Added to your book.</div>`,5000);
+  render(DB.get('route','myleads'));
 }
 function requestCredit(id){
   const p=(SESSION.purchased||[]).find(p=>p.id===id); if(!p) return;
@@ -1906,6 +1955,43 @@ function modal(title,body){
 }
 function closeModal(){ document.getElementById('modal-root').innerHTML=""; }
 
+/* ============================================================
+   LIVE SOCIAL-PROOF TOASTS + POLICY PLACEMENTS
+   ============================================================ */
+function toastWrap(){ let w=document.getElementById('toast-wrap'); if(!w){ w=document.createElement('div'); w.id='toast-wrap'; document.body.appendChild(w); } return w; }
+function showToast(html,ms=5000){
+  const t=document.createElement('div'); t.className='toast'; t.innerHTML=html;
+  toastWrap().appendChild(t); requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),320); }, ms);
+}
+function placements(){ return DB.get('placements',[]); }
+function placementToast(p){
+  showToast(`<div><i class="ph-bold ph-seal-check tic"></i><b>Policy placed!</b></div>
+    <div class="tmeta">An agent in <b>${p.state}</b> just wrote a <b>${p.face}</b> ${p.category||'life'} policy with <b>${p.carrier}</b>.</div>`);
+}
+function addPlacement(p){
+  const arr=placements(); arr.unshift(p); DB.set('placements',arr.slice(0,60));
+  placementToast(p);
+  // broadcast to other open tabs (closest thing to cross-user without a backend)
+  try{ localStorage.setItem('anka_place_ping', JSON.stringify({...p,_t:Date.now()})); }catch(e){}
+}
+window.addEventListener('storage',e=>{ if(e.key==='anka_place_ping' && e.newValue){ try{ placementToast(JSON.parse(e.newValue)); }catch(_){} } });
+/* seed a few sample placements so visitors see live activity */
+function seedPlacements(){
+  if(placements().length) return;
+  const S=["TX","FL","GA","OH","NC","AZ","PA","CA","MI","TN"], C=["Mutual of Omaha","Americo","American Amicable","Corebridge Financial (AIG)","Foresters Financial","Transamerica","Gerber Life","Banner Life (Legal & General)"], F=["$10–20k","$20–35k","$35–50k","$50–100k","$100–200k"], K=["Final Expense","Term Life","Mortgage Protection","Veteran","Senior / Medicare"];
+  const arr=[]; for(let i=0;i<24;i++){ arr.push({state:rnd(S),carrier:rnd(C),face:rnd(F),category:rnd(K),seed:true}); }
+  DB.set('placements',arr);
+}
+/* rotate a social-proof toast periodically (gives the "live" feel) */
+let _spTimer=null;
+function startSocialProof(){
+  if(_spTimer) return;
+  const tick=()=>{ const arr=placements(); if(arr.length){ placementToast(arr[Math.floor(Math.random()*Math.min(arr.length,24))]); } };
+  setTimeout(tick, 6000);
+  _spTimer=setInterval(tick, 22000);
+}
+
 /* ---------- utils ---------- */
 function val(id){const e=document.getElementById(id);return e?e.value.trim():""}
 function filterList(inp,sel){const q=inp.value.toLowerCase();document.querySelectorAll(sel+' label').forEach(l=>{l.style.display=l.textContent.toLowerCase().includes(q)?'':'none';});}
@@ -1918,6 +2004,8 @@ function filterList(inp,sel){const q=inp.value.toLowerCase();document.querySelec
   if(p.get('goto')==='survey'){ DB.set('route','survey'); SV={step:0,a:{}}; }
 })();
 render(DB.get('route','home'));
+seedPlacements();
+startSocialProof();
 
 /* ---------- PWA: service worker + install ---------- */
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
