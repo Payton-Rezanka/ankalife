@@ -319,7 +319,7 @@ footer.ft a{color:#cfe0e6}
    ANKALIFE — AI Life Insurance Lead Platform (demo build)
    Single-file front-end. Data persists in localStorage.
    Pricing benchmarks from real lead vendors (2025-26, recalibrated to mainstream):
-   exclusive $30-75 | aged $1-14 (older=cheaper) — all leads exclusive, no shared/live-transfer
+   exclusive $15-40 | aged ~$1-6 (older=cheaper) — all leads exclusive, no shared/live-transfer
    ============================================================ */
 
 /* ---------- Persistence ---------- */
@@ -463,17 +463,18 @@ function recommend(a){
 
 /* ---------- Pricing engine ----------
    Price a lead from tier + type + freshness (real-market ranges) */
-/* Price = base(type) × intent tier × freshness. Benchmarked to 2025-26 vendors:
-   exclusive $30-75 | aged $1-14 (older=cheaper) — all leads exclusive, no shared/live-transfer (older=cheaper) */
+/* Price = base(type) × intent tier × freshness. Benchmarked to 2025-26 vendors
+   (EverQuote $20-50, exclusive FE $20-45, general life $15-40, aged FE $0.75-$5):
+   exclusive $15-40 | aged ~$1-6 (older=cheaper) — all leads exclusive */
 function priceLead(L){
   const tier=L.score.tier;
-  if(L.type==="exclusive")    return ({A:75,B:58,C:42,D:30})[tier];
+  if(L.type==="exclusive")    return ({A:40,B:30,C:22,D:15})[tier];
   if(L.type==="aged"){
-    const base=({A:14,B:11,C:8,D:5})[tier];
+    const base=({A:8,B:6,C:5,D:3})[tier];
     const f=({fresh:1,d8_30:0.8,d31_90:0.55,d90:0.35})[freshKey(L)]??0.5;
     return Math.max(1,Math.round(base*f));
   }
-  return ({A:75,B:58,C:42,D:30})[tier]; // default = exclusive
+  return ({A:40,B:30,C:22,D:15})[tier]; // default = exclusive
 }
 
 /* ---------- Lead category engine (modeled on top vendors: GOAT, Badass, Redbird) ----------
@@ -698,10 +699,10 @@ views.home=()=>`
   <div class="section-head"><div class="eyebrow">Lead pricing</div><h2>Fair, transparent lead pricing</h2>
   <p>Benchmarked to the 2025–26 market (ActiveProspect, EverQuote, SmartFinancial, MADLeadFlow). Every price is built from three factors — see <a href="#pricing-how">how we price</a> below.</p></div>
   <div class="price-grid">
-    <div class="price-card pop"><div class="tag">EXCLUSIVE TO YOU</div><h3>Exclusive</h3><div class="amt">$30<span>–75</span></div>
+    <div class="price-card pop"><div class="tag">EXCLUSIVE TO YOU</div><h3>Exclusive</h3><div class="amt">$15<span>–40</span></div>
       <ul><li>Real-time, sold to <b>you only</b></li><li>Never shared with other agents</li><li><b>Best for</b> closers</li><li>Full survey + score + carrier match</li></ul>
       <button class="btn btn-primary" style="width:100%" onclick="startOnboard()">Browse</button></div>
-    <div class="price-card"><h3>Aged</h3><div class="amt">$1<span>–14</span></div>
+    <div class="price-card"><h3>Aged</h3><div class="amt">$1<span>–6</span></div>
       <ul><li>8–180+ days old · still exclusive</li><li>High volume, lowest cost</li><li><b>Best for</b> dialers &amp; nurture</li><li>Older = cheaper</li></ul>
       <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
   </div>
@@ -714,7 +715,7 @@ views.home=()=>`
       <div><b>2 · Intent tier (A–D)</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">Our 0–100 purchase-intent score. A <b>Tier A</b> lead (ready now, real budget, coverage gap) converts several times better than a Tier D, so it costs more. You're paying for likelihood-to-close, not just contact info.</p></div>
       <div><b>3 · Freshness</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How long ago the survey was filled out. Fresh leads (0–7 days) carry full price; aged leads are discounted the older they get (down to ~35% at 90+ days) because response rates fall over time.</p></div>
     </div>
-    <div class="note info" style="margin-top:14px"><b>The formula:</b> <code>price = base(type) × tier(A–D) × freshness</code>. Example: a Tier A exclusive lead is ~$75; the same profile as an aged 90+ day lead drops to a few dollars. <b>Why this way?</b> It ties every dollar you spend to expected ROI — you pay the most only for the leads most likely to become a written policy, and pay pennies for bulk aged leads to feed a dialer.</div>
+    <div class="note info" style="margin-top:14px"><b>The formula:</b> <code>price = base(type) × tier(A–D) × freshness</code>. Example: a Tier A exclusive lead is ~$40; the same profile as an aged 90+ day lead drops to ~$1–3. <b>Why this way?</b> It ties every dollar you spend to expected ROI — you pay the most only for the leads most likely to become a written policy, and pennies for bulk aged leads to feed a dialer. Benchmarked to EverQuote, SmartFinancial &amp; final-expense vendors.</div>
   </div>
   <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:18px">No subscriptions or contracts — fund your wallet and pay only for the leads you choose.</p>
 </div></section>
