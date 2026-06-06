@@ -1697,7 +1697,15 @@ async function initAuth(){
   });
   try{
     const {data}=await sb.auth.getSession();
-    if(data && data.session && data.session.user){ await sbLoadProfile(data.session.user); loadCloudLeads(); render(DB.get('route','home')); }
+    if(data && data.session && data.session.user){
+      await sbLoadProfile(data.session.user); loadCloudLeads();
+      let r=DB.get('route','home');
+      // On reload, drop a logged-in user into the right portal based on their CURRENT role
+      if(["home","login","signup","dashboard","aicalls","submissions"].includes(r)){
+        r = SESSION.role==='owner' ? 'aicalls' : (SESSION.status==='approved' ? 'dashboard' : 'onboard');
+      }
+      nav(r);
+    }
   }catch(e){}
   AUTH_READY=true;
 }
