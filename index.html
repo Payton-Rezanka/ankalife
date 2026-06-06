@@ -623,7 +623,7 @@ function render(route){
 /* ---------- Top nav ---------- */
 function topbar(app){
   const right = SESSION
-    ? `<a class="navlink" onclick="nav('${SESSION.role==='owner'?'aicalls':'dashboard'}')">My Portal</a>
+    ? `<a class="navlink" onclick="nav('${SESSION.role==='owner'?'aicalls':'dashboard'}')">${SESSION.role==='owner'?'Owner Portal':'My Portal'}</a>
        <button class="btn btn-ghost btn-sm" onclick="logout()">Log out</button>`
     : `<a class="navlink" onclick="nav('login')">Log in</a>
        <button class="btn btn-primary btn-sm" onclick="startOnboard()">Agent Sign-up</button>`;
@@ -1076,23 +1076,30 @@ function bulkBuyPrompt(){
     <p style="color:var(--muted);margin-bottom:12px">The <b>${list.length}</b> highest-intent leads matching your current filters${MFILTER.cat?` in <b>${MFILTER.cat}</b>`:''}${MFILTER.fresh?` · ${FRESH_BUCKETS.find(b=>b[0]===MFILTER.fresh)[1]}`:''}.</p>
     <div class="kv"><div class="k">Leads</div><div>${list.length}</div>
       <div class="k">Avg price</div><div>$${Math.round(total/list.length)}</div>
-      <div class="k">Total</div><div><b style="font-size:18px">$${total.toLocaleString()}</b></div>
-      <div class="k">Wallet balance</div><div><b style="color:${bal>=total?'var(--good)':'var(--bad)'}">$${bal.toLocaleString()}</b></div></div>
-    ${bal>=total
-      ? `<button class="btn btn-teal" style="width:100%" onclick="bulkBuyConfirm(${n})"><i class="ph ph-lock-simple-open"></i> Pay $${total.toLocaleString()} &amp; unlock ${list.length} leads</button>`
-      : `<div class="alert bad">Your balance is $${(total-bal).toLocaleString()} short.</div><button class="btn btn-teal" style="width:100%" onclick="closeModal();openAddFunds()"><i class="ph ph-plus-circle"></i> Add funds</button>`}
+      <div class="k">Total</div><div><b style="font-size:18px">$${total.toLocaleString()}</b></div></div>
+    <div id="ccErr"></div>
+    <h3 style="font-size:15px;margin:10px 0 8px"><i class="ph-bold ph-credit-card"></i> Pay with card</h3>
+    ${cardFormHTML()}
+    <button class="btn btn-teal" style="width:100%;margin-top:6px" onclick="bulkBuyConfirm(${n},true)"><i class="ph ph-lock-simple"></i> Pay $${total.toLocaleString()} &amp; unlock ${list.length} leads</button>
+    ${bal>=total?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="bulkBuyConfirm(${n},false)">or use wallet balance ($${bal.toLocaleString()})</button>`:''}
+    <div class="note info" style="margin-top:10px">🔒 Demo checkout — no real charge. Production uses Stripe's secure card field.</div>
   `);
 }
-function bulkBuyConfirm(n){
+function bulkBuyConfirm(n, byCard){
   const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
   const list=marketLeads().filter(l=>!owned.has(l.id)).slice(0,n);
   const total=list.reduce((s,l)=>s+l.price,0);
-  if(getBalance()<total){ closeModal(); openAddFunds(); return; }
+  if(byCard){
+    const err=validateCard(); if(err){ const e=document.getElementById('ccErr'); if(e)e.innerHTML=`<div class="alert bad">${err}</div>`; return; }
+    if(!(SESSION.savedCard && val('cc_num').includes('••••')) && document.getElementById('cc_save')?.checked){ SESSION.savedCard={last4:val('cc_num').replace(/\D/g,'').slice(-4)}; }
+  } else if(getBalance()<total){ closeModal(); openAddFunds(); return; }
   SESSION.purchased=SESSION.purchased||[];
   list.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:l.price,status:'new',snapshot:l,boughtAt:Date.now()}); l.exclusiveSoldTo=SESSION.id; });
-  chargeWallet(total, `Bulk purchase — ${list.length} leads`);
+  if(byCard){ logTxn('purchase', -total, `Bulk purchase (card) — ${list.length} leads`); }
+  else { chargeWallet(total, `Bulk purchase — ${list.length} leads`); }
   persistSession(); DB.set('leads',LEADS);
   closeModal(); nav('myleads');
+  if(byCard) showToast(`<div><i class="ph-bold ph-check-circle tic"></i><b>Payment successful</b></div><div class="tmeta">$${total.toLocaleString()} charged · ${list.length} leads unlocked.</div>`,6000);
 }
 function leadCard(l,owned){
   const labelType={livetransfer:"Exclusive",exclusive:"Exclusive",shared:"Exclusive",aged:"Aged "+l.daysAgo+"d"}[l.type];
@@ -1938,30 +1945,73 @@ function buyLead(id){
 }
 function selectAndGo(id){ nav('aicalls'); setTimeout(()=>selectCallLead(id),200); }
 
+function cardFormHTML(){
+  const c=SESSION.savedCard;
+  return `
+    <div class="field"><label>Card number</label><input id="cc_num" inputmode="numeric" autocomplete="cc-number" placeholder="1234 5678 9012 3456" value="${c?'•••• •••• •••• '+c.last4:''}" oninput="fmtCard(this)"></div>
+    <div class="two">
+      <div class="field"><label>Expiry (MM/YY)</label><input id="cc_exp" inputmode="numeric" autocomplete="cc-exp" placeholder="MM/YY" maxlength="5" oninput="fmtExp(this)"></div>
+      <div class="field"><label>CVC</label><input id="cc_cvc" inputmode="numeric" autocomplete="cc-csc" placeholder="123" maxlength="4"></div>
+    </div>
+    <div class="two">
+      <div class="field"><label>Name on card</label><input id="cc_name" autocomplete="cc-name" placeholder="Full name" value="${SESSION.name||''}"></div>
+      <div class="field"><label>Billing ZIP</label><input id="cc_zip" inputmode="numeric" maxlength="5" placeholder="ZIP"></div>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted);margin:2px 0 6px"><input type="checkbox" id="cc_save" ${c?'checked':''}> Save this card for faster checkout</label>`;
+}
 function openCheckout(l){
-  const bal=getBalance(), enough=bal>=l.price;
-  modal(`Confirm purchase`, `
+  const bal=getBalance();
+  modal(`Checkout`, `
     <div class="kv"><div class="k">Lead</div><div>${l.first} ${l.last[0]}. · ${l.state}</div>
-      <div class="k">Type</div><div>${l.type}${l.type==='aged'?' ('+l.daysAgo+'d)':''}</div>
+      <div class="k">Type</div><div>${({exclusive:'Exclusive',aged:'Aged '+l.daysAgo+'d',livetransfer:'Exclusive',shared:'Exclusive'}[l.type])||l.type}</div>
       <div class="k">Intent tier</div><div>Tier ${l.score.tier} · score ${l.score.score}/100</div>
       <div class="k">Top carrier match</div><div>${l.recs[0].name}</div></div>
-    <div class="alert ok" style="display:flex;justify-content:space-between;align-items:center"><span>Lead price</span><b style="font-size:22px">$${l.price}</b></div>
-    <div class="kv" style="margin:4px 0"><div class="k">Wallet balance</div><div><b style="color:${enough?'var(--good)':'var(--bad)'}">$${bal.toLocaleString()}</b></div>
-      <div class="k">After purchase</div><div>$${(bal-l.price).toLocaleString()}</div></div>
-    ${enough
-      ? `<div class="note info">Paid instantly from your balance. Full contact details unlock immediately. (Demo — no card charged; production via Stripe.)</div>
-         <button class="btn btn-teal" style="width:100%" onclick="confirmBuy('${l.id}')"><i class="ph ph-lock-simple-open"></i> Pay $${l.price} from balance &amp; unlock</button>`
-      : `<div class="alert bad">Your balance is $${(l.price-bal).toLocaleString()} short for this lead.</div>
-         <button class="btn btn-teal" style="width:100%" onclick="closeModal();openAddFunds()"><i class="ph ph-plus-circle"></i> Add funds</button>`}
+    <div class="alert ok" style="display:flex;justify-content:space-between;align-items:center"><span>Total due</span><b style="font-size:22px">$${l.price}</b></div>
+    <div id="ccErr"></div>
+    <h3 style="font-size:15px;margin:10px 0 8px"><i class="ph-bold ph-credit-card"></i> Pay with card</h3>
+    ${cardFormHTML()}
+    <button class="btn btn-teal" style="width:100%;margin-top:6px" onclick="confirmBuyCard('${l.id}')"><i class="ph ph-lock-simple"></i> Pay $${l.price} &amp; unlock lead</button>
+    ${bal>=l.price?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="confirmBuy('${l.id}')">or use wallet balance ($${bal.toLocaleString()})</button>`:''}
+    <div class="note info" style="margin-top:10px">🔒 Demo checkout — no real charge. In production this is <b>Stripe's secure, PCI-compliant</b> card field; full card details go straight to Stripe and never touch our servers. Contact info unlocks instantly after payment.</div>
   `);
+}
+/* card input formatting */
+function fmtCard(i){ let v=i.value.replace(/[^\d]/g,'').slice(0,16); i.value=v.replace(/(.{4})/g,'$1 ').trim(); }
+function fmtExp(i){ let v=i.value.replace(/[^\d]/g,'').slice(0,4); i.value=v.length>2?v.slice(0,2)+'/'+v.slice(2):v; }
+function validateCard(){
+  const num=val('cc_num').replace(/\D/g,''), exp=val('cc_exp'), cvc=val('cc_cvc');
+  const saved=SESSION.savedCard && val('cc_num').includes('••••');
+  if(!saved){
+    if(num.length<13) return 'Please enter a valid card number.';
+    if(!/^\d{2}\/\d{2}$/.test(exp)) return 'Enter the expiry as MM/YY.';
+    if(cvc.replace(/\D/g,'').length<3) return 'Enter the 3–4 digit CVC.';
+  }
+  return null;
+}
+function grantLead(l){
+  SESSION.purchased=SESSION.purchased||[];
+  SESSION.purchased.push({id:l.id,paid:l.price,status:"new",snapshot:l,boughtAt:Date.now()});
+  l.exclusiveSoldTo=SESSION.id;  // exclusive — removed from the marketplace for everyone else
+}
+function confirmBuyCard(id){
+  const l=LEADS.find(x=>x.id===id); if(!l) return;
+  const err=validateCard(); if(err){ const e=document.getElementById('ccErr'); if(e)e.innerHTML=`<div class="alert bad">${err}</div>`; return; }
+  // capture ONLY last4 for the receipt — never the full number
+  if(!(SESSION.savedCard && val('cc_num').includes('••••'))){
+    const num=val('cc_num').replace(/\D/g,'');
+    if(document.getElementById('cc_save')?.checked) SESSION.savedCard={last4:num.slice(-4)};
+  }
+  grantLead(l);
+  logTxn('purchase', -l.price, `Lead (card): ${l.first} ${l.last[0]}. · ${l.state} · Tier ${l.score.tier}`);
+  persistSession(); DB.set('leads',LEADS);
+  closeModal(); nav('myleads');
+  showToast(`<div><i class="ph-bold ph-check-circle tic"></i><b>Payment successful</b></div><div class="tmeta">$${l.price} charged${SESSION.savedCard?` to card ••••${SESSION.savedCard.last4}`:''}. Lead unlocked.</div>`,6000);
 }
 function confirmBuy(id){
   const l=LEADS.find(x=>x.id===id);
   if(getBalance()<l.price){ closeModal(); openAddFunds(); return; }
-  SESSION.purchased=SESSION.purchased||[];
-  SESSION.purchased.push({id:l.id,paid:l.price,status:"new",snapshot:l,boughtAt:Date.now()});
+  grantLead(l);
   chargeWallet(l.price, `Lead: ${l.first} ${l.last[0]}. · ${l.state} · Tier ${l.score.tier}`);
-  l.exclusiveSoldTo=SESSION.id;  // every purchase is exclusive — gone from the marketplace for everyone else
   persistSession(); DB.set('leads',LEADS);
   closeModal(); nav('myleads');
 }
