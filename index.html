@@ -319,7 +319,7 @@ footer.ft a{color:#cfe0e6}
    ANKALIFE — AI Life Insurance Lead Platform (demo build)
    Single-file front-end. Data persists in localStorage.
    Pricing benchmarks from real lead vendors (2025-26, recalibrated to mainstream):
-   exclusive $15-40 | aged ~$1-6 (older=cheaper) — all leads exclusive, no shared/live-transfer
+   exclusive(0-14d) $15-40 | aged 15-45/46-75/76-120/120+ stepping $30->$2 — all exclusive
    ============================================================ */
 
 /* ---------- Persistence ---------- */
@@ -463,18 +463,21 @@ function recommend(a){
 
 /* ---------- Pricing engine ----------
    Price a lead from tier + type + freshness (real-market ranges) */
-/* Price = base(type) × intent tier × freshness. Benchmarked to 2025-26 vendors
-   (EverQuote $20-50, exclusive FE $20-45, general life $15-40, aged FE $0.75-$5):
-   exclusive $15-40 | aged ~$1-6 (older=cheaper) — all leads exclusive */
+/* Price by intent tier + freshness bucket. Exclusive (0–14d) is full price; aged
+   leads step DOWN gently by ~30-day bands to a cheap 120+ floor (how aged-lead
+   vendors section by age). Benchmarked to EverQuote/SmartFinancial/FE vendors. */
+const EXCL_PRICE={A:40,B:30,C:22,D:15};
+const AGED_PRICE={
+  d15_45:{A:30,B:23,C:17,D:12},   // freshest aged — small gap below exclusive
+  d46_75:{A:21,B:16,C:12,D:9},
+  d76_120:{A:13,B:10,C:8,D:6},
+  d120:{A:5,B:4,C:3,D:2}          // 120+ days — cheap floor
+};
 function priceLead(L){
   const tier=L.score.tier;
-  if(L.type==="exclusive")    return ({A:40,B:30,C:22,D:15})[tier];
-  if(L.type==="aged"){
-    const base=({A:8,B:6,C:5,D:3})[tier];
-    const f=({fresh:1,d8_30:0.8,d31_90:0.55,d90:0.35})[freshKey(L)]??0.5;
-    return Math.max(1,Math.round(base*f));
-  }
-  return ({A:40,B:30,C:22,D:15})[tier]; // default = exclusive
+  if(L.type==="exclusive") return EXCL_PRICE[tier];
+  if(L.type==="aged") return (AGED_PRICE[freshKey(L)]||AGED_PRICE.d120)[tier];
+  return EXCL_PRICE[tier]; // default = exclusive
 }
 
 /* ---------- Lead category engine (modeled on top vendors: GOAT, Badass, Redbird) ----------
@@ -497,7 +500,7 @@ function categorize(a){
 }
 const CAT_ICON={"Veteran":"ph-medal","Final Expense":"ph-flower-lotus","Mortgage Protection":"ph-house-line","Term Life":"ph-umbrella","IUL / Wealth":"ph-trend-up","Senior / Medicare":"ph-first-aid-kit"};
 /* Freshness buckets (real vendors price by age: fresh real-time -> 12mo aged) */
-const FRESH_BUCKETS=[["fresh","Fresh (0–7 days)",0,7],["d8_30","Aged 8–30 days",8,30],["d31_90","Aged 31–90 days",31,90],["d90","Aged 90+ days",91,9999]];
+const FRESH_BUCKETS=[["fresh","Fresh (0–14 days)",0,14],["d15_45","Aged 15–45 days",15,45],["d46_75","Aged 46–75 days",46,75],["d76_120","Aged 76–120 days",76,120],["d120","Aged 120+ days",121,99999]];
 function leadDays(l){ return l.daysAgo!=null ? l.daysAgo : Math.floor((Date.now()-(l.createdAt||Date.now()))/86400000); }
 function freshKey(l){ const d=leadDays(l); const b=FRESH_BUCKETS.find(x=>d>=x[2]&&d<=x[3]); return b?b[0]:"d90"; }
 function freshLabel(l){ const k=freshKey(l); const b=FRESH_BUCKETS.find(x=>x[0]===k); return b?b[1]:"Aged"; }
@@ -561,7 +564,7 @@ function seedLeads(){
     };
     const score=scoreLead(a);
     const type=rnd(types);
-    const daysAgo = type==="aged" ? 8+Math.floor(Math.random()*180) : Math.floor(Math.random()*8);
+    const daysAgo = type==="aged" ? 15+Math.floor(Math.random()*175) : Math.floor(Math.random()*15);
     const L={ id:"L"+(1000+i), first:rnd(FIRST), last:rnd(LAST),
       state:rnd(STATES), city:"—", phone:"(555) "+(200+Math.floor(Math.random()*799))+"-"+(1000+Math.floor(Math.random()*8999)),
       email:"lead"+i+"@example.com", a, score, type, daysAgo, status:"new", source:"Sample data",
@@ -702,8 +705,8 @@ views.home=()=>`
     <div class="price-card pop"><div class="tag">EXCLUSIVE TO YOU</div><h3>Exclusive</h3><div class="amt">$15<span>–40</span></div>
       <ul><li>Real-time, sold to <b>you only</b></li><li>Never shared with other agents</li><li><b>Best for</b> closers</li><li>Full survey + score + carrier match</li></ul>
       <button class="btn btn-primary" style="width:100%" onclick="startOnboard()">Browse</button></div>
-    <div class="price-card"><h3>Aged</h3><div class="amt">$1<span>–6</span></div>
-      <ul><li>8–180+ days old · still exclusive</li><li>High volume, lowest cost</li><li><b>Best for</b> dialers &amp; nurture</li><li>Older = cheaper</li></ul>
+    <div class="price-card"><h3>Aged</h3><div class="amt">$2<span>–30</span></div>
+      <ul><li>15–120+ days old · still exclusive</li><li>Priced by age: ~30-day bands</li><li><b>Best for</b> dialers &amp; nurture</li><li>120+ days = lowest cost</li></ul>
       <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
   </div>
 
@@ -713,9 +716,9 @@ views.home=()=>`
     <div class="grid-3" style="gap:16px">
       <div><b>1 · Lead type</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How warm it is. Every lead is <b>exclusive to the agent who buys it</b> — never shared. A fresh exclusive lead is worth more than an older aged one. Type sets the base price: <b>Aged &lt; Exclusive</b>. Buy a lead, then call it on your own time — there's no live-transfer/inbound system.</p></div>
       <div><b>2 · Intent tier (A–D)</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">Our 0–100 purchase-intent score. A <b>Tier A</b> lead (ready now, real budget, coverage gap) converts several times better than a Tier D, so it costs more. You're paying for likelihood-to-close, not just contact info.</p></div>
-      <div><b>3 · Freshness</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How long ago the survey was filled out. Fresh leads (0–7 days) carry full price; aged leads are discounted the older they get (down to ~35% at 90+ days) because response rates fall over time.</p></div>
+      <div><b>3 · Freshness</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How long ago the survey was filled out. <b>Exclusive = 0–14 days</b> (full price). Aged leads step down in ~30-day bands — 15–45, 46–75, 76–120 — to a cheap <b>120+ day</b> floor, because response rates fall over time.</p></div>
     </div>
-    <div class="note info" style="margin-top:14px"><b>The formula:</b> <code>price = base(type) × tier(A–D) × freshness</code>. Example: a Tier A exclusive lead is ~$40; the same profile as an aged 90+ day lead drops to ~$1–3. <b>Why this way?</b> It ties every dollar you spend to expected ROI — you pay the most only for the leads most likely to become a written policy, and pennies for bulk aged leads to feed a dialer. Benchmarked to EverQuote, SmartFinancial &amp; final-expense vendors.</div>
+    <div class="note info" style="margin-top:14px"><b>The formula:</b> <code>price = tier(A–D) × freshness band</code>. Example: a Tier A exclusive lead is ~$40; that same profile aged to 15–45 days is ~$30 (small gap), then steps down to ~$2–5 once it's 120+ days old. <b>Why this way?</b> Every dollar tracks expected ROI — you pay most for ready-now exclusive leads, less as they age, and pennies for old aged leads to feed a dialer. Benchmarked to EverQuote, SmartFinancial &amp; aged-lead vendors.</div>
   </div>
   <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:18px">No subscriptions or contracts — fund your wallet and pay only for the leads you choose.</p>
 </div></section>
@@ -1031,7 +1034,9 @@ function savePrefs(){
 }
 function marketLeads(){
   const base = (MFILTER.match && SESSION.role!=="owner") ? matchedLeads() : availableLeads();
+  const myStatesOn = SESSION.role!=="owner" && MFILTER.myStates!==false && (SESSION.states||[]).length>0;
   return base.filter(l=>{
+    if(myStatesOn && !SESSION.states.includes(l.state)) return false;   // only states you're licensed in
     if(MFILTER.tier && l.score.tier!==MFILTER.tier) return false;
     if(MFILTER.type && l.type!==MFILTER.type) return false;
     if(MFILTER.cat && (l.category||categorize(l.a))!==MFILTER.cat) return false;
@@ -1054,11 +1059,13 @@ function marketplace(){
       <option value="aged" ${MFILTER.type==='aged'?'selected':''}>Aged</option></select>
     <select onchange="setFilter('fresh',this.value)" title="How long ago the survey was filled out"><option value="">All ages (freshness)</option>${FRESH_BUCKETS.map(b=>`<option value="${b[0]}" ${MFILTER.fresh===b[0]?'selected':''}>${b[1]}</option>`).join("")}</select>
     <select onchange="setFilter('tier',this.value)"><option value="">All tiers</option><option ${MFILTER.tier==='A'?'selected':''}>A</option><option ${MFILTER.tier==='B'?'selected':''}>B</option><option ${MFILTER.tier==='C'?'selected':''}>C</option><option ${MFILTER.tier==='D'?'selected':''}>D</option></select>
-    <select onchange="setFilter('state',this.value)"><option value="">All states</option>${STATES.map(s=>`<option ${MFILTER.state===s?'selected':''}>${s}</option>`).join("")}</select>
+    ${(function(){const stOnly=!owner&&MFILTER.myStates!==false&&(SESSION.states||[]).length>0;const opts=stOnly?SESSION.states:STATES;return `<select onchange="setFilter('state',this.value)" title="${stOnly?'Your licensed states':'All states'}"><option value="">${stOnly?'All my states':'All states'}</option>${opts.map(s=>`<option ${MFILTER.state===s?'selected':''}>${s}</option>`).join("")}</select>`;})()}
     <input type="number" placeholder="Max price $" value="${MFILTER.max}" oninput="setFilter('max',this.value)" style="width:120px">
+    ${owner?'':`<button class="btn ${MFILTER.myStates!==false?'btn-teal':'btn-outline'} btn-sm" onclick="setFilter('myStates',${MFILTER.myStates===false})" title="Only show leads in states you're licensed in"><i class="ph-bold ph-map-pin"></i> My states</button>`}
     ${owner?'':`<button class="btn ${MFILTER.match?'btn-teal':'btn-outline'} btn-sm" onclick="setFilter('match',${!MFILTER.match})" title="Show only leads matching your preferences"><i class="ph-duotone ph-sparkle"></i> My matches</button>`}
     <span style="color:var(--muted);font-size:13.5px;margin-left:auto">${list.length} leads</span>
   </div>
+  ${(!owner && MFILTER.myStates!==false && !(SESSION.states||[]).length)?`<div class="note" style="margin-bottom:14px"><i class="ph-bold ph-info"></i> You haven't set your licensed states yet — add them in <a onclick="nav('profile')">My Profile</a> so you only see leads you can actually write.</div>`:''}
   ${owner||!buyable.length?'':`<div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px;background:var(--sand)">
     <div style="flex:1;min-width:200px"><b><i class="ph-bold ph-stack"></i> Bulk buy</b><div style="color:var(--muted);font-size:13px">Buy the highest-intent leads matching these filters in one click. ${buyable.length} available.</div></div>
     <input id="bulkQty" type="number" min="1" max="${buyable.length}" value="${Math.min(10,buyable.length)}" style="width:90px;padding:9px 12px;border:1px solid var(--line);border-radius:9px" placeholder="Qty">
