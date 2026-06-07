@@ -1105,9 +1105,9 @@ function bulkBuyConfirm(n, byCard){
   list.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:l.price,status:'new',snapshot:l,boughtAt:Date.now()}); l.exclusiveSoldTo=SESSION.id; });
   if(byCard){ logTxn('purchase', -total, `Bulk purchase (card) — ${list.length} leads`); }
   else { chargeWallet(total, `Bulk purchase — ${list.length} leads`); }
+  const order=recordOrder(list.map(leadLineItem), total, byCard?(SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card'):'Wallet balance');
   persistSession(); DB.set('leads',LEADS);
-  closeModal(); nav('myleads');
-  if(byCard) showToast(`<div><i class="ph-bold ph-check-circle tic"></i><b>Payment successful</b></div><div class="tmeta">$${total.toLocaleString()} charged · ${list.length} leads unlocked.</div>`,6000);
+  closeModal(); nav('myleads'); receiptModal(order);
 }
 function leadCard(l,owned){
   const labelType={livetransfer:"Exclusive",exclusive:"Exclusive",shared:"Exclusive",aged:"Aged "+l.daysAgo+"d"}[l.type];
@@ -1183,6 +1183,17 @@ function walletPage(){
       ${[100,250,500,1000,2500].map(a=>`<button class="btn btn-outline" onclick="addFunds(${a});render('wallet')">+$${a.toLocaleString()}</button>`).join("")}
     </div>
   </div>
+  <div class="card" style="margin-bottom:18px">
+    <h3 style="margin-bottom:4px"><i class="ph-duotone ph-receipt" style="color:var(--teal)"></i> Order receipts</h3>
+    <p style="color:var(--muted);font-size:13.5px;margin-bottom:10px">Every purchase has an emailed receipt — view or download any order here.</p>
+    ${(SESSION.orders||[]).length? `<div style="display:grid;gap:8px">${(SESSION.orders||[]).map(o=>`
+      <div class="callrow" style="background:var(--sand);color:var(--ink);cursor:pointer" onclick="receiptModal((SESSION.orders||[]).find(x=>x.id==='${o.id}'))">
+        <i class="ph-duotone ph-receipt" style="font-size:20px;color:var(--teal)"></i>
+        <div class="meta" style="flex:1"><b>${o.id}</b> · ${o.items.length} item${o.items.length>1?'s':''}<br><small style="color:var(--muted)">${new Date(o.at).toLocaleString()} · ${o.method}</small></div>
+        <div style="text-align:right"><b>$${o.total.toLocaleString()}</b><br><small style="color:var(--teal)">View</small></div>
+      </div>`).join("")}</div>`
+    : `<div class="empty" style="padding:24px"><div class="ic"><i class="ph-duotone ph-receipt"></i></div><p>No orders yet. Your receipts will appear here after your first purchase.</p></div>`}
+  </div>
   <div class="card">
     <h3 style="margin-bottom:10px">Transaction history</h3>
     ${txns.length? `<div style="display:grid;gap:8px">${txns.map(t=>`
@@ -1191,7 +1202,7 @@ function walletPage(){
         <div class="meta" style="flex:1"><b>${t.desc}</b><br><small style="color:var(--muted)">${new Date(t.at).toLocaleString()}</small></div>
         <div style="text-align:right"><b style="color:${t.amt>=0?'var(--good)':'var(--bad)'}">${t.amt>=0?'+':'−'}$${Math.abs(t.amt).toLocaleString()}</b><br><small style="color:var(--muted)">bal $${(t.bal||0).toLocaleString()}</small></div>
       </div>`).join("")}</div>`
-    : `<div class="empty" style="padding:30px"><div class="ic"><i class="ph-duotone ph-receipt"></i></div><p>No transactions yet. Add funds to get started.</p></div>`}
+    : `<div class="empty" style="padding:30px"><div class="ic"><i class="ph-duotone ph-receipt"></i></div><p>No transactions yet.</p></div>`}
   </div>`;
 }
 function openAddFunds(){
@@ -2001,27 +2012,60 @@ function grantLead(l){
   SESSION.purchased.push({id:l.id,paid:l.price,status:"new",snapshot:l,boughtAt:Date.now()});
   l.exclusiveSoldTo=SESSION.id;  // exclusive — removed from the marketplace for everyone else
 }
+function leadLineItem(l){ return {desc:`Lead: ${l.first} ${l.last[0]}. · ${l.state} · ${l.category||categorize(l.a)} · Tier ${l.score.tier}`, price:l.price}; }
+function recordOrder(items, total, method){
+  SESSION.orders=SESSION.orders||[];
+  const order={ id:'AL-'+Date.now().toString().slice(-6)+Math.floor(Math.random()*90+10), at:Date.now(), items, total, method, email:SESSION.email||SESSION.name||'' };
+  SESSION.orders.unshift(order);
+  return order;
+}
+function receiptModal(order){
+  modal('Order receipt · '+order.id, `
+    <div style="text-align:center;margin-bottom:12px"><div style="font-size:42px;color:var(--good)"><i class="ph-duotone ph-receipt"></i></div>
+      <b style="font-size:16px">Thank you — payment received</b>
+      <div style="color:var(--muted);font-size:13px">${new Date(order.at).toLocaleString()}</div></div>
+    <div class="kv"><div class="k">Order #</div><div>${order.id}</div>
+      <div class="k">Billed to</div><div>${order.email||'—'}</div>
+      <div class="k">Payment</div><div>${order.method}</div></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0">
+      ${order.items.map(it=>`<tr style="border-bottom:1px solid var(--line)"><td style="padding:7px 0">${it.desc}</td><td style="padding:7px 0;text-align:right;white-space:nowrap">$${it.price}</td></tr>`).join('')}
+      <tr><td style="padding:10px 0;font-weight:800">Total (${order.items.length} item${order.items.length>1?'s':''})</td><td style="padding:10px 0;text-align:right;font-weight:800">$${order.total.toLocaleString()}</td></tr>
+    </table>
+    <div class="alert ok" style="font-size:13px"><i class="ph-bold ph-envelope-simple"></i> A copy of this receipt has been emailed to <b>${order.email||'your email'}</b>.</div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-teal btn-sm" onclick="downloadReceipt('${order.id}')"><i class="ph-bold ph-download-simple"></i> Download receipt</button>
+      <button class="btn btn-outline btn-sm" onclick="closeModal();nav('myleads')">Go to My Leads</button>
+    </div>
+    <p style="font-size:11.5px;color:var(--muted);margin-top:10px">Saved to your order history (Wallet → Receipts). With live Stripe payments, Stripe emails this receipt automatically.</p>
+  `);
+}
+function downloadReceipt(orderId){
+  const o=(SESSION.orders||[]).find(x=>x.id===orderId); if(!o) return;
+  const lines=['AnkaLife — Order Receipt','='.repeat(34),`Order #: ${o.id}`,`Date:    ${new Date(o.at).toLocaleString()}`,`Billed:  ${o.email}`,`Payment: ${o.method}`,'',...o.items.map(it=>`• ${it.desc}\n   $${it.price}`),'','-'.repeat(34),`TOTAL:   $${o.total.toLocaleString()}`,'','Thank you for your business — AnkaLife'];
+  const blob=new Blob([lines.join('\n')],{type:'text/plain'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`ankalife-receipt-${o.id}.txt`; a.click(); URL.revokeObjectURL(url);
+}
 function confirmBuyCard(id){
   const l=LEADS.find(x=>x.id===id); if(!l) return;
   const err=validateCard(); if(err){ const e=document.getElementById('ccErr'); if(e)e.innerHTML=`<div class="alert bad">${err}</div>`; return; }
-  // capture ONLY last4 for the receipt — never the full number
   if(!(SESSION.savedCard && val('cc_num').includes('••••'))){
     const num=val('cc_num').replace(/\D/g,'');
     if(document.getElementById('cc_save')?.checked) SESSION.savedCard={last4:num.slice(-4)};
   }
   grantLead(l);
-  logTxn('purchase', -l.price, `Lead (card): ${l.first} ${l.last[0]}. · ${l.state} · Tier ${l.score.tier}`);
+  logTxn('purchase', -l.price, `Lead (card): ${l.first} ${l.last[0]}. · ${l.state}`);
+  const order=recordOrder([leadLineItem(l)], l.price, SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card');
   persistSession(); DB.set('leads',LEADS);
-  closeModal(); nav('myleads');
-  showToast(`<div><i class="ph-bold ph-check-circle tic"></i><b>Payment successful</b></div><div class="tmeta">$${l.price} charged${SESSION.savedCard?` to card ••••${SESSION.savedCard.last4}`:''}. Lead unlocked.</div>`,6000);
+  closeModal(); nav('myleads'); receiptModal(order);
 }
 function confirmBuy(id){
   const l=LEADS.find(x=>x.id===id);
   if(getBalance()<l.price){ closeModal(); openAddFunds(); return; }
   grantLead(l);
-  chargeWallet(l.price, `Lead: ${l.first} ${l.last[0]}. · ${l.state} · Tier ${l.score.tier}`);
+  chargeWallet(l.price, `Lead: ${l.first} ${l.last[0]}. · ${l.state}`);
+  const order=recordOrder([leadLineItem(l)], l.price, 'Wallet balance');
   persistSession(); DB.set('leads',LEADS);
-  closeModal(); nav('myleads');
+  closeModal(); nav('myleads'); receiptModal(order);
 }
 function persistSession(){
   if(SESSION && SESSION.sbUser){
