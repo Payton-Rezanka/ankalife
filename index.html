@@ -319,7 +319,7 @@ footer.ft a{color:#cfe0e6}
    ANKALIFE — AI Life Insurance Lead Platform (demo build)
    Single-file front-end. Data persists in localStorage.
    Pricing benchmarks from real lead vendors (2025-26, recalibrated to mainstream):
-   exclusive(0-14d) $15-40 | aged 15-45/46-75/76-120/120+ stepping $30->$2 — all exclusive
+   exclusive(0-14d) $12-33 | aged 15-45/46-75/76-120/120+ $9->$1 — priced just under market
    ============================================================ */
 
 /* ---------- Persistence ---------- */
@@ -463,15 +463,15 @@ function recommend(a){
 
 /* ---------- Pricing engine ----------
    Price a lead from tier + type + freshness (real-market ranges) */
-/* Price by intent tier + freshness bucket. Exclusive (0–14d) is full price; aged
-   leads step DOWN gently by ~30-day bands to a cheap 120+ floor (how aged-lead
-   vendors section by age). Benchmarked to EverQuote/SmartFinancial/FE vendors. */
-const EXCL_PRICE={A:40,B:30,C:22,D:15};
+/* Price by intent tier + freshness bucket. Set intentionally JUST UNDER the market
+   to win agents: competitors charge exclusive ~$20-45, recent aged ~$5-15, old aged
+   ~$1-5 (EverQuote, SmartFinancial, InsureLeads, Aged Lead Store, Lead Heroes). */
+const EXCL_PRICE={A:33,B:25,C:18,D:12};   // vs competitor exclusive $20-45
 const AGED_PRICE={
-  d15_45:{A:30,B:23,C:17,D:12},   // freshest aged — small gap below exclusive
-  d46_75:{A:21,B:16,C:12,D:9},
-  d76_120:{A:13,B:10,C:8,D:6},
-  d120:{A:5,B:4,C:3,D:2}          // 120+ days — cheap floor
+  d15_45:{A:9,B:7,C:6,D:4},   // vs competitor recent-aged $5-15
+  d46_75:{A:6,B:5,C:4,D:3},
+  d76_120:{A:4,B:3,C:2,D:2},
+  d120:{A:2,B:1,C:1,D:1}      // 120+ days — bulk floor (vs competitor $0.50-3)
 };
 function priceLead(L){
   const tier=L.score.tier;
@@ -702,10 +702,10 @@ views.home=()=>`
   <div class="section-head"><div class="eyebrow">Lead pricing</div><h2>Fair, transparent lead pricing</h2>
   <p>Benchmarked to the 2025–26 market (ActiveProspect, EverQuote, SmartFinancial, MADLeadFlow). Every price is built from three factors — see <a href="#pricing-how">how we price</a> below.</p></div>
   <div class="price-grid">
-    <div class="price-card pop"><div class="tag">EXCLUSIVE TO YOU</div><h3>Exclusive</h3><div class="amt">$15<span>–40</span></div>
+    <div class="price-card pop"><div class="tag">EXCLUSIVE TO YOU</div><h3>Exclusive</h3><div class="amt">$12<span>–33</span></div>
       <ul><li>Real-time, sold to <b>you only</b></li><li>Never shared with other agents</li><li><b>Best for</b> closers</li><li>Full survey + score + carrier match</li></ul>
       <button class="btn btn-primary" style="width:100%" onclick="startOnboard()">Browse</button></div>
-    <div class="price-card"><h3>Aged</h3><div class="amt">$2<span>–30</span></div>
+    <div class="price-card"><h3>Aged</h3><div class="amt">$1<span>–9</span></div>
       <ul><li>15–120+ days old · still exclusive</li><li>Priced by age: ~30-day bands</li><li><b>Best for</b> dialers &amp; nurture</li><li>120+ days = lowest cost</li></ul>
       <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
   </div>
@@ -718,7 +718,7 @@ views.home=()=>`
       <div><b>2 · Intent tier (A–D)</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">Our 0–100 purchase-intent score. A <b>Tier A</b> lead (ready now, real budget, coverage gap) converts several times better than a Tier D, so it costs more. You're paying for likelihood-to-close, not just contact info.</p></div>
       <div><b>3 · Freshness</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How long ago the survey was filled out. <b>Exclusive = 0–14 days</b> (full price). Aged leads step down in ~30-day bands — 15–45, 46–75, 76–120 — to a cheap <b>120+ day</b> floor, because response rates fall over time.</p></div>
     </div>
-    <div class="note info" style="margin-top:14px"><b>The formula:</b> <code>price = tier(A–D) × freshness band</code>. Example: a Tier A exclusive lead is ~$40; that same profile aged to 15–45 days is ~$30 (small gap), then steps down to ~$2–5 once it's 120+ days old. <b>Why this way?</b> Every dollar tracks expected ROI — you pay most for ready-now exclusive leads, less as they age, and pennies for old aged leads to feed a dialer. Benchmarked to EverQuote, SmartFinancial &amp; aged-lead vendors.</div>
+    <div class="note info" style="margin-top:14px"><b>The formula:</b> <code>price = tier(A–D) × freshness band</code>. Example: a Tier A exclusive lead is <b>$33</b> (vs. $40–50 at most vendors); the same profile aged to 15–45 days is ~$9, down to ~$1–2 once it's 120+ days old. <b>Priced to win:</b> every tier is set <b>just under the market</b> — competitors charge exclusive ~$20–45 and recent aged ~$5–15; we come in below so you keep more margin per policy. Benchmarked to EverQuote, SmartFinancial, InsureLeads &amp; aged-lead vendors.</div>
   </div>
   <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:18px">No subscriptions or contracts — fund your wallet and pay only for the leads you choose.</p>
 </div></section>
@@ -999,15 +999,15 @@ function agentDashboard(){
    Volume packs + vertical bundles + aged bulk — discounted vs. buying singly.
    ============================================================ */
 const PACKAGES=[
-  {id:'starter', group:'Volume packs — exclusive', name:'Starter Pack', icon:'ph-rocket-launch', kind:'volume_exclusive', count:10, price:270, regular:300, badge:'', blurb:'10 fresh, exclusive, high-intent leads in your licensed states.'},
-  {id:'producer', group:'Volume packs — exclusive', name:'Producer Pack', icon:'ph-trend-up', kind:'volume_exclusive', count:25, price:600, regular:750, badge:'MOST POPULAR', blurb:'25 exclusive leads — our best-selling pack for active producers.'},
-  {id:'elite', group:'Volume packs — exclusive', name:'Elite Pack', icon:'ph-crown', kind:'volume_exclusive', count:50, price:1100, regular:1500, badge:'BEST VALUE', blurb:'50 exclusive leads at the deepest per-lead discount.'},
-  {id:'fe', group:'Vertical bundles', name:'Final Expense Pack', icon:'ph-flower-lotus', kind:'category', category:'Final Expense', count:15, price:360, regular:450, badge:'', blurb:'15 exclusive final-expense leads — perfect for the senior market.'},
-  {id:'vet', group:'Vertical bundles', name:'Veteran Pack', icon:'ph-medal', kind:'category', category:'Veteran', count:10, price:240, regular:300, badge:'', blurb:'10 exclusive veteran & military-family leads.'},
-  {id:'mixed', group:'Vertical bundles', name:'Mixed Book', icon:'ph-stack', kind:'mixed', mix:[{category:'Final Expense',count:10},{category:'Veteran',count:5},{category:'Term Life',count:5}], price:480, regular:600, badge:'', blurb:'10 Final Expense + 5 Veteran + 5 Term — a balanced book to diversify.'},
-  {id:'aged50', group:'Aged bulk — dialer fuel', name:'50 Aged Leads', icon:'ph-phone-call', kind:'aged', count:50, price:79, regular:150, badge:'', blurb:'50 aged leads to keep your dialer busy.'},
-  {id:'aged100', group:'Aged bulk — dialer fuel', name:'100 Aged Leads', icon:'ph-phone-call', kind:'aged', count:100, price:129, regular:300, badge:'', blurb:'100 aged leads — lowest cost per lead.'},
-  {id:'aged250', group:'Aged bulk — dialer fuel', name:'250 Aged Leads', icon:'ph-phone-call', kind:'aged', count:250, price:279, regular:750, badge:'', blurb:'250 aged leads for high-volume calling campaigns.'}
+  {id:'starter', group:'Volume packs — exclusive', name:'Starter Pack', icon:'ph-rocket-launch', kind:'volume_exclusive', count:10, price:250, regular:300, badge:'', blurb:'10 fresh, exclusive, high-intent leads in your licensed states.'},
+  {id:'producer', group:'Volume packs — exclusive', name:'Producer Pack', icon:'ph-trend-up', kind:'volume_exclusive', count:25, price:550, regular:750, badge:'MOST POPULAR', blurb:'25 exclusive leads — our best-selling pack for active producers.'},
+  {id:'elite', group:'Volume packs — exclusive', name:'Elite Pack', icon:'ph-crown', kind:'volume_exclusive', count:50, price:999, regular:1500, badge:'BEST VALUE', blurb:'50 exclusive leads at the deepest per-lead discount.'},
+  {id:'fe', group:'Vertical bundles', name:'Final Expense Pack', icon:'ph-flower-lotus', kind:'category', category:'Final Expense', count:15, price:300, regular:420, badge:'', blurb:'15 exclusive final-expense leads — perfect for the senior market.'},
+  {id:'vet', group:'Vertical bundles', name:'Veteran Pack', icon:'ph-medal', kind:'category', category:'Veteran', count:10, price:210, regular:280, badge:'', blurb:'10 exclusive veteran & military-family leads.'},
+  {id:'mixed', group:'Vertical bundles', name:'Mixed Book', icon:'ph-stack', kind:'mixed', mix:[{category:'Final Expense',count:10},{category:'Veteran',count:5},{category:'Term Life',count:5}], price:399, regular:560, badge:'', blurb:'10 Final Expense + 5 Veteran + 5 Term — a balanced book to diversify.'},
+  {id:'aged50', group:'Aged bulk — dialer fuel', name:'50 Aged Leads', icon:'ph-phone-call', kind:'aged', count:50, price:79, regular:250, badge:'', blurb:'50 aged leads to keep your dialer busy.'},
+  {id:'aged100', group:'Aged bulk — dialer fuel', name:'100 Aged Leads', icon:'ph-phone-call', kind:'aged', count:100, price:139, regular:500, badge:'', blurb:'100 aged leads — lowest cost per lead.'},
+  {id:'aged250', group:'Aged bulk — dialer fuel', name:'250 Aged Leads', icon:'ph-phone-call', kind:'aged', count:250, price:299, regular:1000, badge:'', blurb:'250 aged leads for high-volume calling campaigns.'}
 ];
 function pkgTargetCount(pkg){ return pkg.kind==='mixed'? pkg.mix.reduce((s,m)=>s+m.count,0) : pkg.count; }
 function pkgContents(pkg){
