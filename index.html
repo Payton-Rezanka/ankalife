@@ -548,7 +548,7 @@ function seedLeads(){
   const hlth=["excellent","good","fair","poor"];
   const ex=["none","some","old"];
   let out=[];
-  for(let i=0;i<26;i++){
+  for(let i=0;i<120;i++){
     const anytime=Math.random()<0.45;
     const a={
       age: 24+Math.floor(Math.random()*55),
@@ -618,8 +618,8 @@ function render(route){
   route = route || DB.get('route','home');
   const root=document.getElementById('root');
   // Auth gates
-  if(["dashboard","marketplace","myleads","aicalls","profile","campaigns","wallet","submissions"].includes(route) && !SESSION){ route="login"; }
-  const isApp=["dashboard","marketplace","myleads","aicalls","profile","campaigns","wallet","submissions"].includes(route);
+  if(["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions"].includes(route) && !SESSION){ route="login"; }
+  const isApp=["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions"].includes(route);
   if(isApp){ root.innerHTML = topbar(true) + appShell(route); bindApp(route); }
   else { root.innerHTML = topbar(false) + views[route](); bindPublic(route); }
 }
@@ -888,7 +888,7 @@ function appShell(route){
   const u=SESSION, owner=u.role==="owner";
   const items = owner
     ? [["aicalls","ph-phone-call","AI Sales Engine"],["submissions","ph-database","Lead Intelligence"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["profile","ph-gear","Settings"]]
-    : [["dashboard","ph-house","Dashboard"],["marketplace","ph-tag","Buy Leads"],["myleads","ph-list-checks","My Leads"],["wallet","ph-wallet","Wallet"],["profile","ph-user-gear","My Profile"]];
+    : [["dashboard","ph-house","Dashboard"],["marketplace","ph-tag","Buy Leads"],["packages","ph-package","Packages"],["myleads","ph-list-checks","My Leads"],["wallet","ph-wallet","Wallet"],["profile","ph-user-gear","My Profile"]];
   const st=u.status||"approved";
   const badge = st==="approved"?`<span class="badge ok">● Verified</span>`:st==="denied"?`<span class="badge deny">● Denied</span>`:`<span class="badge pend">● Pending</span>`;
   const side=`<aside class="side">
@@ -913,6 +913,7 @@ function appPage(route){
     case "aicalls": return aiEngine();
     case "campaigns": return campaigns();
     case "wallet": return walletPage();
+    case "packages": return packagesPage();
     case "submissions": return ownerSubmissions();
     case "profile": return profile();
     default: return u.role==="owner"?aiEngine():marketplace();
@@ -993,6 +994,90 @@ function agentDashboard(){
 }
 
 /* ---------- Marketplace ---------- */
+/* ============================================================
+   LEAD PACKAGES / BUNDLES (modeled on Badass, Aged Lead Store, Lead Heroes)
+   Volume packs + vertical bundles + aged bulk — discounted vs. buying singly.
+   ============================================================ */
+const PACKAGES=[
+  {id:'starter', group:'Volume packs — exclusive', name:'Starter Pack', icon:'ph-rocket-launch', kind:'volume_exclusive', count:10, price:270, regular:300, badge:'', blurb:'10 fresh, exclusive, high-intent leads in your licensed states.'},
+  {id:'producer', group:'Volume packs — exclusive', name:'Producer Pack', icon:'ph-trend-up', kind:'volume_exclusive', count:25, price:600, regular:750, badge:'MOST POPULAR', blurb:'25 exclusive leads — our best-selling pack for active producers.'},
+  {id:'elite', group:'Volume packs — exclusive', name:'Elite Pack', icon:'ph-crown', kind:'volume_exclusive', count:50, price:1100, regular:1500, badge:'BEST VALUE', blurb:'50 exclusive leads at the deepest per-lead discount.'},
+  {id:'fe', group:'Vertical bundles', name:'Final Expense Pack', icon:'ph-flower-lotus', kind:'category', category:'Final Expense', count:15, price:360, regular:450, badge:'', blurb:'15 exclusive final-expense leads — perfect for the senior market.'},
+  {id:'vet', group:'Vertical bundles', name:'Veteran Pack', icon:'ph-medal', kind:'category', category:'Veteran', count:10, price:240, regular:300, badge:'', blurb:'10 exclusive veteran & military-family leads.'},
+  {id:'mixed', group:'Vertical bundles', name:'Mixed Book', icon:'ph-stack', kind:'mixed', mix:[{category:'Final Expense',count:10},{category:'Veteran',count:5},{category:'Term Life',count:5}], price:480, regular:600, badge:'', blurb:'10 Final Expense + 5 Veteran + 5 Term — a balanced book to diversify.'},
+  {id:'aged50', group:'Aged bulk — dialer fuel', name:'50 Aged Leads', icon:'ph-phone-call', kind:'aged', count:50, price:79, regular:150, badge:'', blurb:'50 aged leads to keep your dialer busy.'},
+  {id:'aged100', group:'Aged bulk — dialer fuel', name:'100 Aged Leads', icon:'ph-phone-call', kind:'aged', count:100, price:129, regular:300, badge:'', blurb:'100 aged leads — lowest cost per lead.'},
+  {id:'aged250', group:'Aged bulk — dialer fuel', name:'250 Aged Leads', icon:'ph-phone-call', kind:'aged', count:250, price:279, regular:750, badge:'', blurb:'250 aged leads for high-volume calling campaigns.'}
+];
+function pkgTargetCount(pkg){ return pkg.kind==='mixed'? pkg.mix.reduce((s,m)=>s+m.count,0) : pkg.count; }
+function pkgContents(pkg){
+  if(pkg.kind==='mixed') return pkg.mix.map(m=>`${m.count} ${m.category}`).join(' + ');
+  if(pkg.kind==='category') return `${pkg.count} exclusive ${pkg.category} leads`;
+  if(pkg.kind==='aged') return `${pkg.count} aged leads (exclusive)`;
+  return `${pkg.count} exclusive leads`;
+}
+function packagesPage(){
+  const groups=[...new Set(PACKAGES.map(p=>p.group))];
+  return `<div class="page-head"><div><h1>Lead Packages</h1><p>Bundle up and save up to 27% vs. buying one at a time. Every lead is still <b>exclusive to you</b> and matched to your licensed states.</p></div>
+    <button class="btn btn-outline btn-sm" onclick="nav('marketplace')">Buy single leads →</button></div>
+  ${groups.map(g=>`<h3 style="margin:8px 0 12px;font-size:17px">${g}</h3>
+    <div class="grid-3" style="margin-bottom:24px">${PACKAGES.filter(p=>p.group===g).map(p=>{const save=Math.round((1-p.price/p.regular)*100);return `
+      <div class="card feature" style="position:relative">
+        ${p.badge?`<span class="chip" style="position:absolute;top:14px;right:14px;background:var(--gold);color:var(--navy);font-weight:800">${p.badge}</span>`:''}
+        <div class="ic"><i class="ph-duotone ${p.icon}"></i></div>
+        <h3>${p.name}</h3>
+        <p style="color:var(--muted);font-size:13.5px;min-height:38px">${p.blurb}</p>
+        <div style="font-size:13px;color:var(--teal);font-weight:700;margin:4px 0 8px"><i class="ph-bold ph-check"></i> ${pkgContents(p)}</div>
+        <div style="margin:6px 0 12px"><span style="font-size:26px;font-weight:800;font-family:var(--font-display)">$${p.price.toLocaleString()}</span> <span style="text-decoration:line-through;color:var(--muted);font-size:14px">$${p.regular.toLocaleString()}</span> <span class="chip" style="background:#e7f0ec;color:#1f6b48;font-weight:700">Save ${save}%</span></div>
+        <button class="btn btn-teal" style="width:100%" onclick="buyPackage('${p.id}')"><i class="ph ph-shopping-cart"></i> Buy package</button>
+      </div>`;}).join('')}</div>`).join('')}
+  <div class="note info"><i class="ph-bold ph-info"></i> Package leads are delivered <b>exclusively to you</b>. If we don't have the full count in your states this moment, you'll get what's available immediately and the remainder are reserved and delivered as new matching leads arrive (standard for lead packages).</div>`;
+}
+function buyPackage(id){ const pkg=PACKAGES.find(p=>p.id===id); if(pkg) openPackageCheckout(pkg); }
+function openPackageCheckout(pkg){
+  const bal=getBalance();
+  modal('Checkout · '+pkg.name, `
+    <div class="kv"><div class="k">Package</div><div>${pkg.name}</div><div class="k">Includes</div><div>${pkgContents(pkg)}</div></div>
+    <div class="alert ok" style="display:flex;justify-content:space-between;align-items:center"><span>Total</span><b style="font-size:22px">$${pkg.price.toLocaleString()}</b></div>
+    <div id="ccErr"></div>
+    <h3 style="font-size:15px;margin:10px 0 8px"><i class="ph-bold ph-credit-card"></i> Pay with card</h3>
+    ${cardFormHTML()}
+    <button class="btn btn-teal" style="width:100%;margin-top:6px" onclick="confirmBuyPackage('${pkg.id}',true)"><i class="ph ph-lock-simple"></i> Pay $${pkg.price.toLocaleString()} &amp; unlock</button>
+    ${bal>=pkg.price?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="confirmBuyPackage('${pkg.id}',false)">or use wallet balance ($${bal.toLocaleString()})</button>`:''}
+    <div class="note info" style="margin-top:10px">🔒 Demo checkout — no real charge. Production routes through Stripe's secure card field.</div>
+  `);
+}
+function selectPackLeads(pkg){
+  const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
+  const states=SESSION.states||[];
+  const chosen=[], chosenIds=new Set();
+  // pool prefers your licensed states first, then highest intent
+  const pool=availableLeads().filter(l=>!owned.has(l.id))
+    .sort((a,b)=>{const as=states.includes(a.state)?1:0,bs=states.includes(b.state)?1:0; return (bs-as) || (b.score.score-a.score.score);});
+  const take=(fn,n)=>{ pool.filter(l=>!chosenIds.has(l.id)&&fn(l)).slice(0,n).forEach(l=>{chosen.push(l);chosenIds.add(l.id);}); };
+  if(pkg.kind==='volume_exclusive') take(l=>l.type==='exclusive',pkg.count);
+  else if(pkg.kind==='aged') take(l=>l.type==='aged',pkg.count);
+  else if(pkg.kind==='category') take(l=>l.type==='exclusive'&&(l.category||categorize(l.a))===pkg.category,pkg.count);
+  else if(pkg.kind==='mixed') pkg.mix.forEach(m=>take(l=>(l.category||categorize(l.a))===m.category,m.count));
+  return chosen;
+}
+function confirmBuyPackage(id, byCard){
+  const pkg=PACKAGES.find(p=>p.id===id); if(!pkg) return;
+  if(byCard){ const err=validateCard(); if(err){ const e=document.getElementById('ccErr'); if(e)e.innerHTML=`<div class="alert bad">${err}</div>`; return; }
+    if(!(SESSION.savedCard&&val('cc_num').includes('••••'))&&document.getElementById('cc_save')?.checked){ SESSION.savedCard={last4:val('cc_num').replace(/\D/g,'').slice(-4)}; }
+  } else if(getBalance()<pkg.price){ closeModal(); openAddFunds(); return; }
+  const leads=selectPackLeads(pkg);
+  const target=pkgTargetCount(pkg);
+  const perLead=Math.round(pkg.price/Math.max(leads.length,1));
+  SESSION.purchased=SESSION.purchased||[];
+  leads.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:perLead,status:'new',snapshot:l,boughtAt:Date.now(),source:'package:'+pkg.id}); l.exclusiveSoldTo=SESSION.id; });
+  if(byCard) logTxn('purchase',-pkg.price,`Package: ${pkg.name}`); else chargeWallet(pkg.price,`Package: ${pkg.name}`);
+  const order=recordOrder([{desc:`${pkg.name} — ${leads.length} of ${target} leads delivered now`,price:pkg.price}], pkg.price, byCard?(SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card'):'Wallet balance');
+  persistSession(); DB.set('leads',LEADS);
+  closeModal(); nav('myleads'); receiptModal(order);
+  if(leads.length<target){ showToast(`<div><i class="ph-bold ph-info tic" style="color:var(--gold)"></i><b>${leads.length} of ${target} leads delivered now</b></div><div class="tmeta">The remaining ${target-leads.length} are reserved and arrive as new matching leads come in.</div>`,8000); }
+}
+
 let MFILTER={tier:"",type:"",state:"",max:"",match:false,cat:"",fresh:""};
 function availableLeads(){
   const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
@@ -1052,6 +1137,10 @@ function marketplace(){
   const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
   const buyable=list.filter(l=>!owned.has(l.id));
   return `<div class="page-head"><div><h1>${owner?"Lead Marketplace":"Buy Leads"}</h1><p>${owner?"Work any lead with the AI engine, or claim it.":"Scored, consent-collected life-insurance leads. Filter, then buy one or many."}</p></div></div>
+  ${owner?'':`<div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px;border-left:3px solid var(--gold)">
+    <div style="flex:1;min-width:200px"><b><i class="ph-duotone ph-package" style="color:var(--gold)"></i> Save up to 27% with lead packages</b><div style="color:var(--muted);font-size:13px">Buy volume packs, vertical bundles, or aged bulk — every lead still exclusive to you.</div></div>
+    <button class="btn btn-teal btn-sm" onclick="nav('packages')">View packages →</button>
+  </div>`}
   <div class="toolbar">
     <select onchange="setFilter('cat',this.value)" title="Lead category"><option value="">All categories</option>${CATEGORIES.map(c=>`<option ${MFILTER.cat===c?'selected':''}>${c}</option>`).join("")}</select>
     <select onchange="setFilter('type',this.value)" title="Delivery type"><option value="">All types</option>
