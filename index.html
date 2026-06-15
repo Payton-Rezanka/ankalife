@@ -394,7 +394,8 @@ async function loadCloudLeads(){
     LEADS = LEADS.filter(l=>!l.cloud);
     const ids=new Set(LEADS.map(l=>l.id));
     CLOUD_LEADS.forEach(cl=>{ if(!ids.has(cl.id)) LEADS.unshift(cl); });
-    const r=DB.get('route','home'); if(['marketplace','submissions','dashboard'].includes(r)) render(r);
+    fulfillReservations();   // newly-synced leads may fill agents' reserved/backordered quantities
+    const r=DB.get('route','home'); if(['marketplace','submissions','dashboard','myleads'].includes(r)) render(r);
   }catch(e){ console.warn('loadCloudLeads', e); }
 }
 
@@ -1023,21 +1024,28 @@ const PACKAGES=[
   {id:'fe', group:'Vertical bundles', name:'Final Expense Pack', icon:'ph-flower-lotus', kind:'category', category:'Final Expense', count:15, price:300, regular:420, badge:'', blurb:'15 exclusive final-expense leads — seniors looking to cover funeral & final costs.'},
   {id:'vet', group:'Vertical bundles', name:'Veteran Pack', icon:'ph-medal', kind:'category', category:'Veteran', count:15, price:280, regular:375, badge:'', blurb:'15 exclusive veteran & military-family leads.'},
   {id:'mixed', group:'Vertical bundles', name:'Mixed Book', icon:'ph-stack', kind:'mixed', mix:[{category:'Final Expense',count:10},{category:'Veteran',count:5},{category:'Term Life',count:5}], price:399, regular:560, badge:'', blurb:'A 20-lead balanced book: 10 Final Expense + 5 Veteran + 5 Term, to diversify your pipeline.'},
-  {id:'aged50', group:'Aged bulk — dialer fuel', name:'50 Aged Leads', icon:'ph-phone-call', kind:'aged', count:50, price:79, regular:250, badge:'', blurb:'50 older exclusive leads — cheap volume to feed a dialer or nurture sequence.'},
-  {id:'aged100', group:'Aged bulk — dialer fuel', name:'100 Aged Leads', icon:'ph-phone-call', kind:'aged', count:100, price:139, regular:500, badge:'', blurb:'100 older exclusive leads at the lowest cost per lead.'},
-  {id:'aged250', group:'Aged bulk — dialer fuel', name:'250 Aged Leads', icon:'ph-phone-call', kind:'aged', count:250, price:299, regular:1000, badge:'', blurb:'250 older exclusive leads for high-volume calling campaigns.'}
+  {id:'aged', group:'Aged bulk — dialer fuel', name:'Aged Leads', icon:'ph-phone-call', kind:'agedvol', badge:'', blurb:'Older exclusive leads at the lowest cost per lead — perfect dialer fuel or a nurture sequence. Choose any quantity; we deliver what we have now and the rest fill in automatically as leads age in.'}
 ];
+const AGED_MIN=25, AGED_PER_LEAD=2.20;
 function packBlendedPerLead(mix){ return EXCL_PRICE.A*mix.A + EXCL_PRICE.B*mix.B + EXCL_PRICE.C*mix.C + EXCL_PRICE.D*mix.D; }
 function volumeDiscount(qty){ return qty>=50?0.25 : qty>=30?0.18 : 0.10; }   // 15-29:10% · 30-49:18% · 50+:25%
 function volumePackPrice(pkg, qty){ return Math.max(1, Math.round(qty*packBlendedPerLead(pkg.mix)*(1-volumeDiscount(qty)))); }
+function agedDiscount(qty){ return qty>=250?0.45 : qty>=100?0.37 : qty>=50?0.28 : 0.10; }
+function agedPackPrice(qty){ return Math.max(1, Math.round(qty*AGED_PER_LEAD*(1-agedDiscount(qty)))); }
+function packMin(pkg){ return pkg.kind==='agedvol'?AGED_MIN:VOLUME_MIN; }
+function packDiscount(pkg, qty){ return pkg.kind==='agedvol'?agedDiscount(qty):volumeDiscount(qty); }
+function packQtyPrice(pkg, qty){ return pkg.kind==='agedvol'?agedPackPrice(qty):volumePackPrice(pkg, qty); }
+function isQtyPack(pkg){ return pkg.kind==='volume'||pkg.kind==='agedvol'; }
 function mixSummary(mix){ return ['A','B','C','D'].filter(t=>mix[t]>0).map(t=>Math.round(mix[t]*100)+'% '+t).join(' · '); }
 function pkgTargetCount(pkg, qty){
   if(pkg.kind==='volume') return qty||VOLUME_MIN;
+  if(pkg.kind==='agedvol') return qty||AGED_MIN;
   if(pkg.kind==='mixed') return pkg.mix.reduce((s,m)=>s+m.count,0);
   return pkg.count;
 }
 function pkgContents(pkg, qty){
   if(pkg.kind==='volume') return `${qty||VOLUME_MIN} exclusive leads · tier mix ≈ ${mixSummary(pkg.mix)}`;
+  if(pkg.kind==='agedvol') return `${qty||AGED_MIN} aged exclusive leads`;
   if(pkg.kind==='mixed') return pkg.mix.map(m=>`${m.count} ${m.category}`).join(' + ');
   if(pkg.kind==='category') return `${pkg.count} exclusive ${pkg.category} leads`;
   if(pkg.kind==='aged') return `${pkg.count} aged leads (exclusive)`;
@@ -1047,17 +1055,20 @@ function packagesPage(){
   const groups=[...new Set(PACKAGES.map(p=>p.group))];
   const card=(p)=>{
     const badge=p.badge?`<span class="chip" style="position:absolute;top:14px;right:14px;background:var(--gold);color:var(--navy);font-weight:800">${p.badge}</span>`:'';
-    if(p.kind==='volume'){
-      const pl=Math.round(volumePackPrice(p,VOLUME_MIN)/VOLUME_MIN), tot=volumePackPrice(p,VOLUME_MIN);
+    if(isQtyPack(p)){
+      const min=packMin(p), pl=Math.round(packQtyPrice(p,min)/min), tot=packQtyPrice(p,min);
+      const subline = p.kind==='agedvol'
+        ? `<div style="font-size:13px;color:var(--teal);font-weight:700;margin:2px 0 8px"><i class="ph-bold ph-phone-call"></i> Aged exclusive leads · dialer fuel</div>`
+        : `<div style="font-size:13px;color:var(--teal);font-weight:700;margin:2px 0 8px"><i class="ph-bold ph-chart-pie-slice"></i> Tier mix ≈ ${mixSummary(p.mix)}</div>`;
       return `<div class="card feature" style="position:relative">${badge}
         <div class="ic"><i class="ph-duotone ${p.icon}"></i></div>
         <h3>${p.name}</h3>
         <p style="color:var(--muted);font-size:13.5px;min-height:72px">${p.blurb}</p>
-        <div style="font-size:13px;color:var(--teal);font-weight:700;margin:2px 0 8px"><i class="ph-bold ph-chart-pie-slice"></i> Tier mix ≈ ${mixSummary(p.mix)}</div>
+        ${subline}
         <div style="font-size:13px;color:var(--muted);margin-bottom:6px">From <b style="color:var(--ink)">$${pl}</b>/lead</div>
-        <label style="font-size:12.5px;font-weight:700">How many leads? <span class="hint">(min ${VOLUME_MIN})</span></label>
-        <input id="qty_${p.id}" type="number" min="${VOLUME_MIN}" value="${VOLUME_MIN}" oninput="updatePackTotal('${p.id}')" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:9px;margin:4px 0 8px">
-        <div style="margin-bottom:10px">Total: <b id="tot_${p.id}" style="font-size:20px;font-family:var(--font-display)">$${tot.toLocaleString()}</b> <span class="chip" id="disc_${p.id}" style="background:#e7f0ec;color:#1f6b48;font-weight:700">${Math.round(volumeDiscount(VOLUME_MIN)*100)}% volume off</span></div>
+        <label style="font-size:12.5px;font-weight:700">How many leads? <span class="hint">(min ${min}, no max)</span></label>
+        <input id="qty_${p.id}" type="number" min="${min}" value="${min}" oninput="updatePackTotal('${p.id}')" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:9px;margin:4px 0 8px">
+        <div style="margin-bottom:10px">Total: <b id="tot_${p.id}" style="font-size:20px;font-family:var(--font-display)">$${tot.toLocaleString()}</b> <span class="chip" id="disc_${p.id}" style="background:#e7f0ec;color:#1f6b48;font-weight:700">${Math.round(packDiscount(p,min)*100)}% volume off</span></div>
         <button class="btn btn-teal" style="width:100%" onclick="buyVolumePack('${p.id}')"><i class="ph ph-shopping-cart"></i> Buy leads</button>
       </div>`;
     }
@@ -1079,14 +1090,14 @@ function packagesPage(){
 }
 function updatePackTotal(id){
   const pkg=PACKAGES.find(p=>p.id===id), inp=document.getElementById('qty_'+id); if(!pkg||!inp) return;
-  let qty=parseInt(inp.value)||VOLUME_MIN; if(qty<VOLUME_MIN)qty=VOLUME_MIN; inp.value=qty;
-  const t=document.getElementById('tot_'+id); if(t)t.textContent='$'+volumePackPrice(pkg,qty).toLocaleString();
-  const d=document.getElementById('disc_'+id); if(d)d.textContent=Math.round(volumeDiscount(qty)*100)+'% volume off';
+  const min=packMin(pkg); let qty=parseInt(inp.value)||min; if(qty<min)qty=min; inp.value=qty;
+  const t=document.getElementById('tot_'+id); if(t)t.textContent='$'+packQtyPrice(pkg,qty).toLocaleString();
+  const d=document.getElementById('disc_'+id); if(d)d.textContent=Math.round(packDiscount(pkg,qty)*100)+'% volume off';
 }
 function buyVolumePack(id){
   const pkg=PACKAGES.find(p=>p.id===id), inp=document.getElementById('qty_'+id);
-  let qty=parseInt(inp&&inp.value)||VOLUME_MIN; if(qty<VOLUME_MIN)qty=VOLUME_MIN;
-  openPackageCheckout(pkg, qty, volumePackPrice(pkg,qty));
+  const min=packMin(pkg); let qty=parseInt(inp&&inp.value)||min; if(qty<min)qty=min;
+  openPackageCheckout(pkg, qty, packQtyPrice(pkg,qty));
 }
 function buyPackage(id){ const pkg=PACKAGES.find(p=>p.id===id); if(pkg) openPackageCheckout(pkg, pkgTargetCount(pkg), pkg.price); }
 function openPackageCheckout(pkg, qty, price){
@@ -1106,10 +1117,11 @@ function openPackageCheckout(pkg, qty, price){
 function selectPackLeads(pkg, qty){
   const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
   const states=SESSION.states||[];
+  const statesOn = SESSION.role!=='owner' && states.length>0;
   const chosen=[], chosenIds=new Set();
-  // pool prefers your licensed states first, then highest intent
-  const pool=availableLeads().filter(l=>!owned.has(l.id))
-    .sort((a,b)=>{const as=states.includes(a.state)?1:0,bs=states.includes(b.state)?1:0; return (bs-as) || (b.score.score-a.score.score);});
+  // restricted to your licensed states (anything short is reserved & back-ordered), highest intent first
+  const pool=availableLeads().filter(l=>!owned.has(l.id) && (!statesOn || states.includes(l.state)))
+    .sort((a,b)=>b.score.score-a.score.score);
   const take=(fn,n)=>{ pool.filter(l=>!chosenIds.has(l.id)&&fn(l)).slice(0,n).forEach(l=>{chosen.push(l);chosenIds.add(l.id);}); };
   if(pkg.kind==='volume'){
     qty=qty||VOLUME_MIN;
@@ -1117,28 +1129,119 @@ function selectPackLeads(pkg, qty){
     if(chosen.length<qty) take(l=>l.type==='exclusive', qty-chosen.length);
     if(chosen.length>qty) chosen.length=qty; // never over-deliver vs. the quantity paid for
   }
-  else if(pkg.kind==='aged') take(l=>l.type==='aged',pkg.count);
+  else if(pkg.kind==='agedvol'||pkg.kind==='aged') take(l=>l.type==='aged', qty||pkg.count);
   else if(pkg.kind==='category') take(l=>l.type==='exclusive'&&(l.category||categorize(l.a))===pkg.category,pkg.count);
   else if(pkg.kind==='mixed') pkg.mix.forEach(m=>take(l=>(l.category||categorize(l.a))===m.category,m.count));
   return chosen;
 }
 function confirmBuyPackage(id, byCard, qty, price){
   const pkg=PACKAGES.find(p=>p.id===id); if(!pkg) return;
-  const target=pkg.kind==='volume'?(qty||VOLUME_MIN):pkgTargetCount(pkg);
+  const target=pkgTargetCount(pkg, qty);
   if(price==null) price=pkg.price;
   if(byCard){ const err=validateCard(); if(err){ const e=document.getElementById('ccErr'); if(e)e.innerHTML=`<div class="alert bad">${err}</div>`; return; }
     if(!(SESSION.savedCard&&val('cc_num').includes('••••'))&&document.getElementById('cc_save')?.checked){ SESSION.savedCard={last4:val('cc_num').replace(/\D/g,'').slice(-4)}; }
   } else if(getBalance()<price){ closeModal(); openAddFunds(); return; }
   const leads=selectPackLeads(pkg, target);
-  const perLead=Math.round(price/Math.max(leads.length,1));
+  const perLead=Math.max(1, Math.round(price/Math.max(target,1)));   // per-lead based on the FULL quantity, so reserved leads are pre-paid
   SESSION.purchased=SESSION.purchased||[];
   leads.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:perLead,status:'new',snapshot:l,boughtAt:Date.now(),source:'package:'+pkg.id}); l.exclusiveSoldTo=SESSION.id; });
+  const shortfall=Math.max(0, target-leads.length);
+  if(shortfall>0) createPackReservations(pkg, leads, target, perLead);   // backorder the rest — no inventory cap
   if(byCard) logTxn('purchase',-price,`Package: ${pkg.name}`); else chargeWallet(price,`Package: ${pkg.name}`);
-  const order=recordOrder([{desc:`${pkg.name} — ${leads.length} of ${target} leads delivered now`,price:price}], price, byCard?(SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card'):'Wallet balance');
+  const order=recordOrder([{desc:`${pkg.name} — ${leads.length} delivered now${shortfall>0?`, ${shortfall} reserved`:''}`,price:price}], price, byCard?(SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card'):'Wallet balance');
   persistSession(); saveLeads();
   closeModal(); nav('myleads'); receiptModal(order);
-  if(leads.length<target){ showToast(`<div><i class="ph-bold ph-info tic" style="color:var(--gold)"></i><b>${leads.length} of ${target} leads delivered now</b></div><div class="tmeta">The remaining ${target-leads.length} are reserved and arrive as new matching leads come in.</div>`,8000); }
+  if(shortfall>0){ showToast(`<div><i class="ph-bold ph-hourglass-medium tic" style="color:var(--gold)"></i><b>${leads.length} delivered now · ${shortfall} reserved</b></div><div class="tmeta">The reserved leads are paid for and will drop into My Leads automatically as matching leads come in — we'll email ${SESSION.email||'you'} each time.</div>`,9000); }
 }
+
+/* ============================================================
+   BACKORDER RESERVATIONS
+   Buy any quantity, even past current stock. The shortfall is
+   reserved (pre-paid) and auto-delivered as matching leads arrive,
+   with an email notification to the agent on every delivery.
+   (Demo: emails are queued in localStorage; production drains the
+   queue from a Supabase Edge Function via Resend/SMTP.)
+   ============================================================ */
+function getReservations(){ return DB.get('reservations',[]); }
+function setReservations(r){ DB.set('reservations', r); }
+function leadCat(l){ return l.category || categorize(l.a); }
+function specMatches(l, spec){
+  if(l.exclusiveSoldTo) return false;                                  // already sold/owned
+  if(spec.states && spec.states.length && !spec.states.includes(l.state)) return false;
+  if(spec.kind==='aged') return l.type==='aged';
+  if(spec.kind==='category') return l.type==='exclusive' && leadCat(l)===spec.category;
+  return l.type==='exclusive';                                         // volume / generic exclusive
+}
+function addReservation(spec, remaining, meta){
+  if(remaining<=0) return;
+  const r=getReservations();
+  r.push(Object.assign({ id:'R'+Date.now()+Math.floor(Math.random()*1000),
+    agentId:SESSION.id, agentEmail:SESSION.email||'', agentName:SESSION.name||'',
+    spec, remaining, createdAt:Date.now() }, meta||{}));
+  setReservations(r);
+}
+function createPackReservations(pkg, granted, target, perLead){
+  const states=SESSION.states||[];
+  const meta={packId:pkg.id, packName:pkg.name, perLead};
+  if(pkg.kind==='mixed'){
+    pkg.mix.forEach(m=>{ const got=granted.filter(l=>leadCat(l)===m.category).length; const short=m.count-got;
+      if(short>0) addReservation({kind:'category', category:m.category, states}, short, meta); });
+    return;
+  }
+  const short=target-granted.length; if(short<=0) return;
+  let spec;
+  if(pkg.kind==='category') spec={kind:'category', category:pkg.category, states};
+  else if(pkg.kind==='agedvol'||pkg.kind==='aged') spec={kind:'aged', states};
+  else spec={kind:'exclusive', states};
+  addReservation(spec, short, meta);
+}
+function grantReservedLead(r, l){
+  l.exclusiveSoldTo = r.agentId;
+  const rec={id:l.id, paid:r.perLead||l.price, status:'new', snapshot:Object.assign({},l), boughtAt:Date.now(), source:'reserved:'+(r.packId||'pack')};
+  if(SESSION && SESSION.id===r.agentId){
+    SESSION.purchased=SESSION.purchased||[]; SESSION.purchased.push(rec);
+  } else {
+    const k='ud_'+r.agentId, ud=DB.get(k,null);
+    if(ud){ ud.purchased=ud.purchased||[]; ud.purchased.push(rec); DB.set(k,ud); }
+    else { const all=accounts(); const a=all.find(x=>x.id===r.agentId); if(a){ a.purchased=a.purchased||[]; a.purchased.push(rec); saveAccounts(all); } }
+  }
+}
+function fulfillReservations(){
+  let resv=getReservations(); if(!resv.length || !LEADS) return;
+  let changed=false;
+  resv.forEach(r=>{
+    if(r.remaining<=0) return;
+    const pool=LEADS.filter(l=>specMatches(l,r.spec)).sort((a,b)=>b.score.score-a.score.score);
+    const delivered=[];
+    for(const l of pool){ if(r.remaining<=0) break; grantReservedLead(r,l); r.remaining--; delivered.push(l); changed=true; }
+    if(delivered.length) notifyDelivery(r, delivered);
+  });
+  resv=resv.filter(r=>r.remaining>0);
+  setReservations(resv);
+  if(changed){ saveLeads(); if(SESSION && SESSION.id) persistSession(); }
+}
+function queueEmail(to, subject, body){
+  const q=DB.get('email_queue',[]); q.push({to:to||'', subject, body, at:Date.now(), sent:false}); DB.set('email_queue', q);
+  try{ console.log('[AnkaLife email queued →]', to, '|', subject); }catch(e){}
+  // PRODUCTION: a Supabase Edge Function drains email_queue and sends via Resend/SMTP, then marks sent=true.
+}
+function notifyDelivery(r, leads){
+  const n=leads.length;
+  const subject=`AnkaLife: ${n} new lead${n>1?'s':''} delivered to your account`;
+  const body=`Hi ${r.agentName||'there'},\n\n${n} new lead${n>1?'s':''} from your "${r.packName||'lead order'}" just arrived in your AnkaLife account:\n`+
+    leads.map(l=>`  • ${l.first} ${l.last} — ${l.state} · ${leadCat(l)} · Tier ${l.score.tier} (intent ${l.score.score}/100)`).join('\n')+
+    `\n\nLog in to view full contact details and start working them:\nhttps://ankalifeleads.com\n\nYou're receiving this because you have reserved leads on backorder.\n— AnkaLife`;
+  queueEmail(r.agentEmail, subject, body);
+  const k='deliv_'+r.agentId, feed=DB.get(k,[]);
+  feed.unshift({at:Date.now(), pack:r.packName||'Lead order', count:n, ids:leads.map(l=>l.id), email:r.agentEmail});
+  DB.set(k, feed.slice(0,50));
+  if(SESSION && SESSION.id===r.agentId){
+    showToast(`<div><i class="ph-bold ph-bell-ringing tic" style="color:var(--teal)"></i><b>${n} reserved lead${n>1?'s':''} just landed</b></div><div class="tmeta">From your ${r.packName||'order'} — now in My Leads. Confirmation emailed to ${r.agentEmail||'you'}.</div>`,7000);
+  }
+}
+function myReservations(){ return SESSION&&SESSION.id ? getReservations().filter(r=>r.agentId===SESSION.id && r.remaining>0) : []; }
+function myReservedCount(){ return myReservations().reduce((s,r)=>s+r.remaining,0); }
+function myDeliveries(){ return SESSION&&SESSION.id ? DB.get('deliv_'+SESSION.id, []) : []; }
 
 let MFILTER={tier:"",type:"",state:"",max:"",match:false,cat:"",fresh:""};
 function availableLeads(){
@@ -1330,12 +1433,35 @@ function trigLabel(t){return {newbaby:"New baby",mortgage:"Mortgage",marriage:"M
 function statusLabel(s){return {new:"New",contacted:"Contacted",appt:"Appt set",sold:"Sold",credited:"Credited"}[s]||s}
 
 /* ---------- My leads ---------- */
+function reservationBannerHTML(){
+  const rs=myReservations(); if(!rs.length) return '';
+  const total=rs.reduce((s,r)=>s+r.remaining,0);
+  const rows=rs.map(r=>{
+    const what = r.spec.kind==='aged'?'Aged leads' : r.spec.kind==='category'?(r.spec.category+' leads') : 'Exclusive leads';
+    const where = (r.spec.states&&r.spec.states.length)?(' · '+r.spec.states.join('/')):'';
+    return `<div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px solid var(--line)"><span>${r.packName||'Order'} — ${what}${where}</span><b style="white-space:nowrap">${r.remaining} reserved</b></div>`;
+  }).join('');
+  return `<div class="card" style="border-left:3px solid var(--gold);background:var(--sand);margin-bottom:16px">
+    <b style="font-size:15px"><i class="ph-duotone ph-hourglass-medium" style="color:var(--gold)"></i> ${total} lead${total>1?'s':''} reserved &amp; on the way</b>
+    <p style="color:var(--muted);font-size:13px;margin:4px 0 6px">These are paid for. They drop into your account automatically as matching leads come in — and we email <b>${SESSION.email||'you'}</b> each time one arrives.</p>
+    ${rows}</div>`;
+}
+function deliveriesFeedHTML(){
+  const d=myDeliveries().slice(0,5); if(!d.length) return '';
+  return `<div class="card" style="margin-bottom:16px"><b style="font-size:14px"><i class="ph-duotone ph-bell-ringing" style="color:var(--teal)"></i> Recent reserved-lead deliveries</b>
+    <div style="margin-top:6px">${d.map(x=>`<div style="font-size:13px;color:var(--muted);padding:3px 0">+${x.count} ${x.pack} lead${x.count>1?'s':''} · ${new Date(x.at).toLocaleString()} · emailed ${x.email||'you'}</div>`).join('')}</div></div>`;
+}
 function myLeads(){
   const b=ownedLeads();
-  if(!b.length) return `<div class="page-head"><div><h1>My Leads</h1></div></div><div class="empty"><div class="ic"><i class="ph-duotone ph-clipboard-text"></i></div><p>You haven't purchased any leads yet. <a onclick="nav('marketplace')">Browse the marketplace →</a></p></div>`;
+  const resBanner=reservationBannerHTML(), feed=deliveriesFeedHTML();
+  if(!b.length){
+    if(!myReservedCount()) return `<div class="page-head"><div><h1>My Leads</h1></div></div><div class="empty"><div class="ic"><i class="ph-duotone ph-clipboard-text"></i></div><p>You haven't purchased any leads yet. <a onclick="nav('marketplace')">Browse the marketplace →</a></p></div>`;
+    return `<div class="page-head"><div><h1>My Leads</h1><p>Your reserved leads will appear here automatically as they arrive.</p></div></div>${resBanner}${feed}`;
+  }
   const byStatus=s=>b.filter(l=>(l.status||'new')===s).length;
   return `<div class="page-head"><div><h1>My Leads</h1><p>${b.length} leads · full contact details unlocked.</p></div>
     <button class="btn btn-outline btn-sm" onclick="exportLeadsCSV()"><i class="ph ph-download-simple"></i> Export CSV</button></div>
+  ${resBanner}${feed}
   <div class="stat-row">
     <div class="stat"><div class="lab">New</div><div class="val">${byStatus('new')}</div></div>
     <div class="stat"><div class="lab">Contacted</div><div class="val">${byStatus('contacted')}</div></div>
@@ -2130,6 +2256,7 @@ function submitSurvey(){
   L.price=priceLead(L);
   const refAgent=attributeReferral(L);
   LEADS.unshift(L); saveLeads(); DB.set('ref',null);
+  fulfillReservations();   // a new lead may fill an agent's backordered/reserved quantity
   cloudInsertLead(L);   // <-- write the real lead to the shared cloud database
   SV={step:0,a:{}};
   document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
@@ -2549,6 +2676,7 @@ function pickAll(sel,cls,val){ document.querySelectorAll(sel+' label').forEach(l
 render(DB.get('route','home'));
 seedPlacements();
 startSocialProof();
+fulfillReservations();   // deliver any reserved leads that matching stock can now cover
 loadCloudLeads();   // pull shared leads from Supabase and merge in
 initAuth();         // restore Supabase session + handle magic-link sign-in
 
