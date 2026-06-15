@@ -1181,7 +1181,7 @@ function savePrefs(){
 }
 function marketLeads(){
   const base = (MFILTER.match && SESSION.role!=="owner") ? matchedLeads() : availableLeads();
-  const myStatesOn = SESSION.role!=="owner" && MFILTER.myStates!==false && (SESSION.states||[]).length>0;
+  const myStatesOn = SESSION.role!=="owner" && (SESSION.states||[]).length>0;   // always restrict agents to their licensed states
   return base.filter(l=>{
     if(myStatesOn && !SESSION.states.includes(l.state)) return false;   // only states you're licensed in
     if(MFILTER.tier && l.score.tier!==MFILTER.tier) return false;
@@ -1210,52 +1210,96 @@ function marketplace(){
       <option value="aged" ${MFILTER.type==='aged'?'selected':''}>Aged</option></select>
     <select onchange="setFilter('fresh',this.value)" title="How long ago the survey was filled out"><option value="">All ages (freshness)</option>${FRESH_BUCKETS.map(b=>`<option value="${b[0]}" ${MFILTER.fresh===b[0]?'selected':''}>${b[1]}</option>`).join("")}</select>
     <select onchange="setFilter('tier',this.value)"><option value="">All tiers</option><option ${MFILTER.tier==='A'?'selected':''}>A</option><option ${MFILTER.tier==='B'?'selected':''}>B</option><option ${MFILTER.tier==='C'?'selected':''}>C</option><option ${MFILTER.tier==='D'?'selected':''}>D</option></select>
-    ${(function(){const stOnly=!owner&&MFILTER.myStates!==false&&(SESSION.states||[]).length>0;const opts=stOnly?SESSION.states:STATES;return `<select onchange="setFilter('state',this.value)" title="${stOnly?'Your licensed states':'All states'}"><option value="">${stOnly?'All my states':'All states'}</option>${opts.map(s=>`<option ${MFILTER.state===s?'selected':''}>${s}</option>`).join("")}</select>`;})()}
+    ${(function(){const stOnly=!owner&&(SESSION.states||[]).length>0;const opts=stOnly?SESSION.states:STATES;return `<select onchange="setFilter('state',this.value)" title="${stOnly?'Your licensed states':'All states'}"><option value="">${stOnly?'All my states':'All states'}</option>${opts.map(s=>`<option ${MFILTER.state===s?'selected':''}>${s}</option>`).join("")}</select>`;})()}
     <input type="number" placeholder="Max price $" value="${MFILTER.max}" oninput="setFilter('max',this.value)" style="width:120px">
-    ${owner?'':`<button class="btn ${MFILTER.myStates!==false?'btn-teal':'btn-outline'} btn-sm" onclick="setFilter('myStates',${MFILTER.myStates===false})" title="Only show leads in states you're licensed in"><i class="ph-bold ph-map-pin"></i> My states</button>`}
+    ${owner?'':((SESSION.states||[]).length?`<span class="chip" title="You only see leads in states you're licensed in. Update these in My Profile." style="background:#e7f0ec;color:#1f6b48;font-weight:700;display:inline-flex;align-items:center;gap:5px"><i class="ph-bold ph-map-pin"></i> Licensed states only</span>`:'')}
     ${owner?'':`<button class="btn ${MFILTER.match?'btn-teal':'btn-outline'} btn-sm" onclick="setFilter('match',${!MFILTER.match})" title="Show only leads matching your preferences"><i class="ph-duotone ph-sparkle"></i> My matches</button>`}
     <span style="color:var(--muted);font-size:13.5px;margin-left:auto">${list.length} leads</span>
   </div>
-  ${(!owner && MFILTER.myStates!==false && !(SESSION.states||[]).length)?`<div class="note" style="margin-bottom:14px"><i class="ph-bold ph-info"></i> You haven't set your licensed states yet — add them in <a onclick="nav('profile')">My Profile</a> so you only see leads you can actually write.</div>`:''}
-  ${owner||!buyable.length?'':`<div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px;background:var(--sand)">
-    <div style="flex:1;min-width:200px"><b><i class="ph-bold ph-stack"></i> Bulk buy</b><div style="color:var(--muted);font-size:13px">Buy the highest-intent leads matching these filters in one click. ${buyable.length} available.</div></div>
-    <input id="bulkQty" type="number" min="1" max="${buyable.length}" value="${Math.min(10,buyable.length)}" style="width:90px;padding:9px 12px;border:1px solid var(--line);border-radius:9px" placeholder="Qty">
-    <button class="btn btn-teal" onclick="bulkBuyPrompt()"><i class="ph-bold ph-shopping-cart"></i> Buy this many</button>
+  ${(!owner && !(SESSION.states||[]).length)?`<div class="note" style="margin-bottom:14px"><i class="ph-bold ph-info"></i> You haven't set your licensed states yet — add them in <a onclick="nav('profile')">My Profile</a> so you only see leads you can actually write.</div>`:''}
+  ${owner||!buyable.length?'':`<div class="card" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px;background:var(--sand);border-left:3px solid var(--teal)">
+    <div style="flex:1;min-width:200px"><b><i class="ph-bold ph-lightning" style="color:var(--teal)"></i> Quick buy — skip the hand-picking</b><div style="color:var(--muted);font-size:13px">Choose a tier (or mix) and how many leads you want — we auto-pick the highest-intent matches in your licensed states. Or scroll down to hand-pick individual leads.</div></div>
+    <button class="btn btn-teal" onclick="quickBuyOpen()"><i class="ph-bold ph-lightning"></i> Quick buy by tier</button>
   </div>`}
   ${list.length?`<div class="lead-grid">${list.map(l=>leadCard(l,false)).join("")}</div>`:`<div class="empty"><div class="ic"><i class="ph-duotone ph-magnifying-glass"></i></div><p>No leads match your filters.</p></div>`}`;
 }
-function bulkBuyPrompt(){
-  const n=parseInt(document.getElementById('bulkQty')?.value)||0;
-  if(n<1){ alert('Enter how many leads to buy.'); return; }
+/* ---------- Quick buy: pick tier(s) + quantity, auto-select leads ---------- */
+let QB={tiers:[],type:'exclusive'};
+function quickBuyPool(){
   const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
-  const list=marketLeads().filter(l=>!owned.has(l.id)).slice(0,n);
-  if(!list.length){ alert('No leads match your filters.'); return; }
-  const total=list.reduce((s,l)=>s+l.price,0), bal=getBalance();
-  modal(`Buy ${list.length} leads`,`
-    <p style="color:var(--muted);margin-bottom:12px">The <b>${list.length}</b> highest-intent leads matching your current filters${MFILTER.cat?` in <b>${MFILTER.cat}</b>`:''}${MFILTER.fresh?` · ${FRESH_BUCKETS.find(b=>b[0]===MFILTER.fresh)[1]}`:''}.</p>
-    <div class="kv"><div class="k">Leads</div><div>${list.length}</div>
-      <div class="k">Avg price</div><div>$${Math.round(total/list.length)}</div>
-      <div class="k">Total</div><div><b style="font-size:18px">$${total.toLocaleString()}</b></div></div>
+  const states=SESSION.states||[];
+  const statesOn = SESSION.role!=="owner" && states.length>0;
+  return availableLeads().filter(l=>{
+    if(owned.has(l.id)) return false;
+    if(statesOn && !states.includes(l.state)) return false;          // only your licensed states
+    if(QB.type && l.type!==QB.type) return false;
+    if(QB.tiers.length && !QB.tiers.includes(l.score.tier)) return false;
+    return true;
+  }).sort((a,b)=>b.score.score-a.score.score);                        // highest intent first
+}
+function quickBuyOpen(){
+  QB={tiers:[],type:'exclusive'};
+  const tierBtn=t=>`<button type="button" id="qbt_${t}" onclick="quickBuyToggleTier('${t}')" class="chip" style="cursor:pointer;border:1px solid var(--line);font-weight:700">Tier ${t}</button>`;
+  modal('⚡ Quick buy leads',`
+    <p style="color:var(--muted);margin-bottom:14px">Pick the intent tier(s) you want and how many leads — we'll automatically grab the <b>highest-intent matches in your licensed states</b>. No hand-picking.</p>
+    <div class="field"><label>Intent tier <span class="hint">(leave all off = any tier)</span></label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">${['A','B','C','D'].map(tierBtn).join('')}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">A = highest intent / ready to buy · D = early interest. Mix as many as you like.</div>
+    </div>
+    <div class="field"><label>Lead type</label>
+      <select id="qb_type" onchange="QB.type=this.value;quickBuyRefresh()">
+        <option value="exclusive" selected>Exclusive — fresh</option>
+        <option value="aged">Aged — discounted</option>
+        <option value="">Any type</option>
+      </select>
+    </div>
+    <div class="field"><label>How many leads?</label>
+      <input id="qb_qty" type="number" min="1" value="10" oninput="quickBuyRefresh()">
+    </div>
+    <div id="qb_summary"></div>
     <div id="ccErr"></div>
     <h3 style="font-size:15px;margin:10px 0 8px"><i class="ph-bold ph-credit-card"></i> Pay with card</h3>
     ${cardFormHTML()}
-    <button class="btn btn-teal" style="width:100%;margin-top:6px" onclick="bulkBuyConfirm(${n},true)"><i class="ph ph-lock-simple"></i> Pay $${total.toLocaleString()} &amp; unlock ${list.length} leads</button>
-    ${bal>=total?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="bulkBuyConfirm(${n},false)">or use wallet balance ($${bal.toLocaleString()})</button>`:''}
+    <button id="qb_cardbtn" class="btn btn-teal" style="width:100%;margin-top:6px" onclick="quickBuyConfirm(true)"><i class="ph ph-lock-simple"></i> Pay &amp; unlock</button>
+    <div id="qb_walletwrap"></div>
     <div class="note info" style="margin-top:10px">🔒 Demo checkout — no real charge. Production uses Stripe's secure card field.</div>
   `);
+  quickBuyRefresh();
 }
-function bulkBuyConfirm(n, byCard){
-  const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
-  const list=marketLeads().filter(l=>!owned.has(l.id)).slice(0,n);
+function quickBuyToggleTier(t){
+  const i=QB.tiers.indexOf(t); if(i<0)QB.tiers.push(t); else QB.tiers.splice(i,1);
+  const b=document.getElementById('qbt_'+t); if(b){const on=QB.tiers.includes(t); b.style.background=on?'var(--teal)':''; b.style.color=on?'#fff':''; b.style.borderColor=on?'var(--teal)':'var(--line)';}
+  quickBuyRefresh();
+}
+function quickBuyRefresh(){
+  const pool=quickBuyPool(), avail=pool.length;
+  const qi=document.getElementById('qb_qty'); let qty=parseInt(qi&&qi.value)||0; if(qty<1)qty=1;
+  const take=pool.slice(0,qty), total=take.reduce((s,l)=>s+l.price,0), bal=getBalance();
+  const sum=document.getElementById('qb_summary');
+  if(sum){
+    if(!avail){ sum.innerHTML=`<div class="alert bad">No ${QB.type==='aged'?'aged ':QB.type==='exclusive'?'exclusive ':''}leads available${QB.tiers.length?` at tier ${QB.tiers.join('/')}`:''}${(SESSION.states||[]).length?' in your licensed states':''} right now. Try different tiers or type.</div>`; }
+    else sum.innerHTML=`<div class="kv"><div class="k">Tier</div><div>${QB.tiers.length?QB.tiers.join(' / '):'Any'}</div><div class="k">Available now</div><div>${avail} match${avail===1?'':'es'}</div><div class="k">Buying</div><div><b>${take.length}</b>${take.length<qty?` <span style="color:var(--muted)">(only ${avail} available)</span>`:''}</div><div class="k">Avg price</div><div>$${Math.round(total/Math.max(take.length,1))}</div><div class="k">Total</div><div><b style="font-size:18px">$${total.toLocaleString()}</b></div></div>`;
+  }
+  const cb=document.getElementById('qb_cardbtn');
+  if(cb){ cb.disabled=!avail; cb.style.opacity=avail?'1':'.5'; cb.innerHTML=avail?`<i class="ph ph-lock-simple"></i> Pay $${total.toLocaleString()} &amp; unlock ${take.length} lead${take.length===1?'':'s'}`:`<i class="ph ph-lock-simple"></i> No leads to buy`; }
+  const ww=document.getElementById('qb_walletwrap');
+  if(ww){ ww.innerHTML=(avail&&bal>=total)?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="quickBuyConfirm(false)">or use wallet balance ($${bal.toLocaleString()})</button>`:''; }
+}
+function quickBuyConfirm(byCard){
+  const pool=quickBuyPool();
+  const qi=document.getElementById('qb_qty'); let qty=parseInt(qi&&qi.value)||0; if(qty<1)qty=1;
+  const list=pool.slice(0,qty);
+  if(!list.length){ const e=document.getElementById('ccErr'); if(e)e.innerHTML=`<div class="alert bad">No matching leads to buy.</div>`; return; }
   const total=list.reduce((s,l)=>s+l.price,0);
   if(byCard){
     const err=validateCard(); if(err){ const e=document.getElementById('ccErr'); if(e)e.innerHTML=`<div class="alert bad">${err}</div>`; return; }
     if(!(SESSION.savedCard && val('cc_num').includes('••••')) && document.getElementById('cc_save')?.checked){ SESSION.savedCard={last4:val('cc_num').replace(/\D/g,'').slice(-4)}; }
   } else if(getBalance()<total){ closeModal(); openAddFunds(); return; }
   SESSION.purchased=SESSION.purchased||[];
-  list.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:l.price,status:'new',snapshot:l,boughtAt:Date.now()}); l.exclusiveSoldTo=SESSION.id; });
-  if(byCard){ logTxn('purchase', -total, `Bulk purchase (card) — ${list.length} leads`); }
-  else { chargeWallet(total, `Bulk purchase — ${list.length} leads`); }
+  list.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:l.price,status:'new',snapshot:l,boughtAt:Date.now(),source:'quickbuy'}); l.exclusiveSoldTo=SESSION.id; });
+  const label=`Quick buy — ${list.length} lead${list.length===1?'':'s'}${QB.tiers.length?` (tier ${QB.tiers.join('/')})`:''}`;
+  if(byCard){ logTxn('purchase', -total, label+' (card)'); }
+  else { chargeWallet(total, label); }
   const order=recordOrder(list.map(leadLineItem), total, byCard?(SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card'):'Wallet balance');
   persistSession(); saveLeads();
   closeModal(); nav('myleads'); receiptModal(order);
