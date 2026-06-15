@@ -652,7 +652,7 @@ function topbar(app){
     <a class="navlink" onclick="nav('home')">Home</a>
     <a class="navlink" onclick="nav('home');setTimeout(()=>scrollToId('how'),60)">How it works</a>
     <a class="navlink" onclick="nav('home');setTimeout(()=>scrollToId('pricing'),60)">Pricing</a>
-    <a class="navlink" onclick="nav('survey')">Get a Quote</a>
+    <a class="navlink" onclick="nav('survey')">Fill out Survey</a>
     ${right}
   </div></header>`;
 }
@@ -890,7 +890,7 @@ function surveyResult(){
         <input type="checkbox" id="c_consent" style="margin-top:3px;flex-shrink:0">
         <span>By checking this box and clicking submit, I give my prior <b>express written consent</b> to be contacted by AnkaLife and its licensed agents at the phone number and email above — including by autodialer, prerecorded/AI voice, SMS, and email — about life insurance, even if my number is on a Do-Not-Call list. Consent isn't a condition of purchase; I can opt out anytime by replying STOP. I agree to the Privacy Policy & Terms.</span>
       </label>
-      <button class="btn btn-teal" style="width:100%" onclick="submitSurvey()"><i class="ph-bold ph-paper-plane-tilt"></i> Submit & get my quote</button>
+      <button class="btn btn-teal" style="width:100%" onclick="submitSurvey()"><i class="ph-bold ph-paper-plane-tilt"></i> Submit my survey</button>
       <p style="font-size:11.5px;color:var(--muted);margin-top:10px;text-align:center">🔒 Your information is sent only to a licensed, verified agent. We never sell it to unverified parties.</p>
     </div>
   </div>`;
@@ -2260,9 +2260,13 @@ function submitSurvey(){
   cloudInsertLead(L);   // <-- write the real lead to the shared cloud database
   SV={step:0,a:{}};
   document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
-    <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">You're all set, ${first}!</h1>
-    <p style="color:var(--muted)">Your information has been sent to ${refAgent?`<b>${refAgent.name}</b>, a`:'a'} licensed, verified agent in ${state}. Expect a call at ${phone} soon.</p>
-    <div class="alert ok" style="text-align:left;margin-top:16px"><b><i class="ph-bold ph-chat-circle-text"></i> We just texted you a confirmation</b>
+    <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">Thanks, ${first} — your survey is in!</h1>
+    <p style="color:var(--muted)">Your answers have been matched to ${refAgent?`<b>${refAgent.name}</b>, a`:'a'} licensed, verified life-insurance agent in ${state}. This was a quick survey — <b>not an instant quote</b>. A real agent will personally reach out <b>soon</b> (usually within a day or two) to review your options and build a quote that actually fits you.</p>
+    <div class="alert" style="text-align:left;margin-top:16px;background:#fff7e8;border:1px solid #f0d28a">
+      <b style="color:#8a5a00"><i class="ph-bold ph-phone-incoming"></i> Please watch for our call — even from an unknown number</b>
+      <p style="font-size:13px;margin-top:6px;color:#6b4d12">Your agent will call from a regular phone number, so it may show up as <b>"Unknown," "Spam Likely," or a number you don't recognize</b> — that's just how today's spam filters flag new callers, not a real spam call. Please <b>answer calls from unfamiliar numbers</b> over the next few days, and if you miss it, <b>check your voicemail and texts</b> — we'll leave a message. Saving our number when we reach you helps future calls come through.</p>
+    </div>
+    <div class="alert ok" style="text-align:left;margin-top:12px"><b><i class="ph-bold ph-chat-circle-text"></i> We just texted you a confirmation</b>
       <p style="font-size:13px;margin-top:6px;font-style:italic;color:#176b48">"${clientConfirmationSMS(first)}"</p></div>
     <p style="font-size:12px;color:var(--muted);margin-top:10px">A confirmation email is on its way too. You can opt out anytime by replying STOP.</p>
     <button class="btn btn-teal" style="margin-top:14px" onclick="nav('home')">Back to home</button></div></div>`;
@@ -2270,7 +2274,7 @@ function submitSurvey(){
 /* Drafted automated confirmation the client receives right after submitting.
    (Front-end shows it; real delivery is sent via Twilio/SMS + email from the backend.) */
 function clientConfirmationSMS(first){
-  return `Hi ${first||'there'}, this is AnkaLife — thanks for requesting your life insurance quote! ✅ A licensed agent will call you at your chosen time to go over your options. Have your current policy info handy if you have any. Questions? Just reply here. Reply STOP to opt out.`;
+  return `Hi ${first||'there'}, this is AnkaLife — thanks for completing your life insurance survey! ✅ A licensed agent will call you soon to go over your options (this wasn't an instant quote). 📞 Heads up: the call may show as "Unknown" or "Spam Likely" — please pick up, or check voicemail if you miss it. Have any current policy info handy. Reply STOP to opt out.`;
 }
 
 function setFilter(k,v){ MFILTER[k]=v; render('marketplace'); }
