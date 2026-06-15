@@ -1012,19 +1012,32 @@ function agentDashboard(){
    LEAD PACKAGES / BUNDLES (modeled on Badass, Aged Lead Store, Lead Heroes)
    Volume packs + vertical bundles + aged bulk — discounted vs. buying singly.
    ============================================================ */
+const VOLUME_MIN=15;
 const PACKAGES=[
-  {id:'starter', group:'Volume packs — exclusive', name:'Starter Pack', icon:'ph-rocket-launch', kind:'volume_exclusive', count:10, price:250, regular:300, badge:'', blurb:'10 fresh, exclusive, high-intent leads in your licensed states.'},
-  {id:'producer', group:'Volume packs — exclusive', name:'Producer Pack', icon:'ph-trend-up', kind:'volume_exclusive', count:25, price:550, regular:750, badge:'MOST POPULAR', blurb:'25 exclusive leads — our best-selling pack for active producers.'},
-  {id:'elite', group:'Volume packs — exclusive', name:'Elite Pack', icon:'ph-crown', kind:'volume_exclusive', count:50, price:999, regular:1500, badge:'BEST VALUE', blurb:'50 exclusive leads at the deepest per-lead discount.'},
-  {id:'fe', group:'Vertical bundles', name:'Final Expense Pack', icon:'ph-flower-lotus', kind:'category', category:'Final Expense', count:15, price:300, regular:420, badge:'', blurb:'15 exclusive final-expense leads — perfect for the senior market.'},
-  {id:'vet', group:'Vertical bundles', name:'Veteran Pack', icon:'ph-medal', kind:'category', category:'Veteran', count:10, price:210, regular:280, badge:'', blurb:'10 exclusive veteran & military-family leads.'},
-  {id:'mixed', group:'Vertical bundles', name:'Mixed Book', icon:'ph-stack', kind:'mixed', mix:[{category:'Final Expense',count:10},{category:'Veteran',count:5},{category:'Term Life',count:5}], price:399, regular:560, badge:'', blurb:'10 Final Expense + 5 Veteran + 5 Term — a balanced book to diversify.'},
-  {id:'aged50', group:'Aged bulk — dialer fuel', name:'50 Aged Leads', icon:'ph-phone-call', kind:'aged', count:50, price:79, regular:250, badge:'', blurb:'50 aged leads to keep your dialer busy.'},
-  {id:'aged100', group:'Aged bulk — dialer fuel', name:'100 Aged Leads', icon:'ph-phone-call', kind:'aged', count:100, price:139, regular:500, badge:'', blurb:'100 aged leads — lowest cost per lead.'},
-  {id:'aged250', group:'Aged bulk — dialer fuel', name:'250 Aged Leads', icon:'ph-phone-call', kind:'aged', count:250, price:299, regular:1000, badge:'', blurb:'250 aged leads for high-volume calling campaigns.'}
+  {id:'starter', group:'Volume packs — choose your quantity (min 15)', name:'Starter Pack', icon:'ph-rocket-launch', kind:'volume', mix:{A:0.10,B:0.20,C:0.40,D:0.30}, badge:'',
+    blurb:"Best for newer agents & prospecting. A value mix — mostly mid-and-lower-intent exclusive leads at the lowest cost per lead, with a few high-intent ones mixed in."},
+  {id:'producer', group:'Volume packs — choose your quantity (min 15)', name:'Producer Pack', icon:'ph-trend-up', kind:'volume', mix:{A:0.25,B:0.35,C:0.25,D:0.15}, badge:'MOST POPULAR',
+    blurb:"Best all-around value. A balanced mix — a healthy share of high-intent A/B leads with some C/D sprinkled in. Steady flow for active producers."},
+  {id:'elite', group:'Volume packs — choose your quantity (min 15)', name:'Elite Pack', icon:'ph-crown', kind:'volume', mix:{A:0.60,B:0.30,C:0.10,D:0.00}, badge:'PREMIUM',
+    blurb:"Best for closers. The majority are top-tier (A) ready-to-buy leads, with a few B/C — highest close rate, premium price per lead."},
+  {id:'fe', group:'Vertical bundles', name:'Final Expense Pack', icon:'ph-flower-lotus', kind:'category', category:'Final Expense', count:15, price:300, regular:420, badge:'', blurb:'15 exclusive final-expense leads — seniors looking to cover funeral & final costs.'},
+  {id:'vet', group:'Vertical bundles', name:'Veteran Pack', icon:'ph-medal', kind:'category', category:'Veteran', count:15, price:280, regular:375, badge:'', blurb:'15 exclusive veteran & military-family leads.'},
+  {id:'mixed', group:'Vertical bundles', name:'Mixed Book', icon:'ph-stack', kind:'mixed', mix:[{category:'Final Expense',count:10},{category:'Veteran',count:5},{category:'Term Life',count:5}], price:399, regular:560, badge:'', blurb:'A 20-lead balanced book: 10 Final Expense + 5 Veteran + 5 Term, to diversify your pipeline.'},
+  {id:'aged50', group:'Aged bulk — dialer fuel', name:'50 Aged Leads', icon:'ph-phone-call', kind:'aged', count:50, price:79, regular:250, badge:'', blurb:'50 older exclusive leads — cheap volume to feed a dialer or nurture sequence.'},
+  {id:'aged100', group:'Aged bulk — dialer fuel', name:'100 Aged Leads', icon:'ph-phone-call', kind:'aged', count:100, price:139, regular:500, badge:'', blurb:'100 older exclusive leads at the lowest cost per lead.'},
+  {id:'aged250', group:'Aged bulk — dialer fuel', name:'250 Aged Leads', icon:'ph-phone-call', kind:'aged', count:250, price:299, regular:1000, badge:'', blurb:'250 older exclusive leads for high-volume calling campaigns.'}
 ];
-function pkgTargetCount(pkg){ return pkg.kind==='mixed'? pkg.mix.reduce((s,m)=>s+m.count,0) : pkg.count; }
-function pkgContents(pkg){
+function packBlendedPerLead(mix){ return EXCL_PRICE.A*mix.A + EXCL_PRICE.B*mix.B + EXCL_PRICE.C*mix.C + EXCL_PRICE.D*mix.D; }
+function volumeDiscount(qty){ return qty>=50?0.25 : qty>=30?0.18 : 0.10; }   // 15-29:10% · 30-49:18% · 50+:25%
+function volumePackPrice(pkg, qty){ return Math.max(1, Math.round(qty*packBlendedPerLead(pkg.mix)*(1-volumeDiscount(qty)))); }
+function mixSummary(mix){ return ['A','B','C','D'].filter(t=>mix[t]>0).map(t=>Math.round(mix[t]*100)+'% '+t).join(' · '); }
+function pkgTargetCount(pkg, qty){
+  if(pkg.kind==='volume') return qty||VOLUME_MIN;
+  if(pkg.kind==='mixed') return pkg.mix.reduce((s,m)=>s+m.count,0);
+  return pkg.count;
+}
+function pkgContents(pkg, qty){
+  if(pkg.kind==='volume') return `${qty||VOLUME_MIN} exclusive leads · tier mix ≈ ${mixSummary(pkg.mix)}`;
   if(pkg.kind==='mixed') return pkg.mix.map(m=>`${m.count} ${m.category}`).join(' + ');
   if(pkg.kind==='category') return `${pkg.count} exclusive ${pkg.category} leads`;
   if(pkg.kind==='aged') return `${pkg.count} aged leads (exclusive)`;
@@ -1032,36 +1045,65 @@ function pkgContents(pkg){
 }
 function packagesPage(){
   const groups=[...new Set(PACKAGES.map(p=>p.group))];
-  return `<div class="page-head"><div><h1>Lead Packages</h1><p>Bundle up and save up to 27% vs. buying one at a time. Every lead is still <b>exclusive to you</b> and matched to your licensed states.</p></div>
-    <button class="btn btn-outline btn-sm" onclick="nav('marketplace')">Buy single leads →</button></div>
-  ${groups.map(g=>`<h3 style="margin:8px 0 12px;font-size:17px">${g}</h3>
-    <div class="grid-3" style="margin-bottom:24px">${PACKAGES.filter(p=>p.group===g).map(p=>{const save=Math.round((1-p.price/p.regular)*100);return `
-      <div class="card feature" style="position:relative">
-        ${p.badge?`<span class="chip" style="position:absolute;top:14px;right:14px;background:var(--gold);color:var(--navy);font-weight:800">${p.badge}</span>`:''}
+  const card=(p)=>{
+    const badge=p.badge?`<span class="chip" style="position:absolute;top:14px;right:14px;background:var(--gold);color:var(--navy);font-weight:800">${p.badge}</span>`:'';
+    if(p.kind==='volume'){
+      const pl=Math.round(volumePackPrice(p,VOLUME_MIN)/VOLUME_MIN), tot=volumePackPrice(p,VOLUME_MIN);
+      return `<div class="card feature" style="position:relative">${badge}
         <div class="ic"><i class="ph-duotone ${p.icon}"></i></div>
         <h3>${p.name}</h3>
-        <p style="color:var(--muted);font-size:13.5px;min-height:38px">${p.blurb}</p>
-        <div style="font-size:13px;color:var(--teal);font-weight:700;margin:4px 0 8px"><i class="ph-bold ph-check"></i> ${pkgContents(p)}</div>
-        <div style="margin:6px 0 12px"><span style="font-size:26px;font-weight:800;font-family:var(--font-display)">$${p.price.toLocaleString()}</span> <span style="text-decoration:line-through;color:var(--muted);font-size:14px">$${p.regular.toLocaleString()}</span> <span class="chip" style="background:#e7f0ec;color:#1f6b48;font-weight:700">Save ${save}%</span></div>
-        <button class="btn btn-teal" style="width:100%" onclick="buyPackage('${p.id}')"><i class="ph ph-shopping-cart"></i> Buy package</button>
-      </div>`;}).join('')}</div>`).join('')}
-  <div class="note info"><i class="ph-bold ph-info"></i> Package leads are delivered <b>exclusively to you</b>. If we don't have the full count in your states this moment, you'll get what's available immediately and the remainder are reserved and delivered as new matching leads arrive (standard for lead packages).</div>`;
+        <p style="color:var(--muted);font-size:13.5px;min-height:72px">${p.blurb}</p>
+        <div style="font-size:13px;color:var(--teal);font-weight:700;margin:2px 0 8px"><i class="ph-bold ph-chart-pie-slice"></i> Tier mix ≈ ${mixSummary(p.mix)}</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px">From <b style="color:var(--ink)">$${pl}</b>/lead</div>
+        <label style="font-size:12.5px;font-weight:700">How many leads? <span class="hint">(min ${VOLUME_MIN})</span></label>
+        <input id="qty_${p.id}" type="number" min="${VOLUME_MIN}" value="${VOLUME_MIN}" oninput="updatePackTotal('${p.id}')" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:9px;margin:4px 0 8px">
+        <div style="margin-bottom:10px">Total: <b id="tot_${p.id}" style="font-size:20px;font-family:var(--font-display)">$${tot.toLocaleString()}</b> <span class="chip" id="disc_${p.id}" style="background:#e7f0ec;color:#1f6b48;font-weight:700">${Math.round(volumeDiscount(VOLUME_MIN)*100)}% volume off</span></div>
+        <button class="btn btn-teal" style="width:100%" onclick="buyVolumePack('${p.id}')"><i class="ph ph-shopping-cart"></i> Buy leads</button>
+      </div>`;
+    }
+    const save=Math.round((1-p.price/p.regular)*100);
+    return `<div class="card feature" style="position:relative">${badge}
+      <div class="ic"><i class="ph-duotone ${p.icon}"></i></div>
+      <h3>${p.name}</h3>
+      <p style="color:var(--muted);font-size:13.5px;min-height:72px">${p.blurb}</p>
+      <div style="font-size:13px;color:var(--teal);font-weight:700;margin:4px 0 8px"><i class="ph-bold ph-check"></i> ${pkgContents(p)}</div>
+      <div style="margin:6px 0 12px"><span style="font-size:26px;font-weight:800;font-family:var(--font-display)">$${p.price.toLocaleString()}</span> <span style="text-decoration:line-through;color:var(--muted);font-size:14px">$${p.regular.toLocaleString()}</span> <span class="chip" style="background:#e7f0ec;color:#1f6b48;font-weight:700">Save ${save}%</span></div>
+      <button class="btn btn-teal" style="width:100%" onclick="buyPackage('${p.id}')"><i class="ph ph-shopping-cart"></i> Buy package</button>
+    </div>`;
+  };
+  return `<div class="page-head"><div><h1>Lead Packages</h1><p>Pick a volume pack and choose your quantity (min ${VOLUME_MIN}), or grab a vertical or aged bundle — all discounted vs. buying singly. Every lead is <b>exclusive to you</b>.</p></div>
+    <button class="btn btn-outline btn-sm" onclick="nav('marketplace')">Buy single leads →</button></div>
+  ${groups.map(g=>`<h3 style="margin:8px 0 12px;font-size:17px">${g}</h3>
+    <div class="grid-3" style="margin-bottom:24px">${PACKAGES.filter(p=>p.group===g).map(card).join('')}</div>`).join('')}
+  <div class="note info"><i class="ph-bold ph-info"></i> Package leads are delivered <b>exclusively to you</b>, highest-intent first and preferring your licensed states. If the full count isn't available right now, you get what's in stock immediately and the rest are reserved and delivered as new matching leads arrive.</div>`;
 }
-function buyPackage(id){ const pkg=PACKAGES.find(p=>p.id===id); if(pkg) openPackageCheckout(pkg); }
-function openPackageCheckout(pkg){
+function updatePackTotal(id){
+  const pkg=PACKAGES.find(p=>p.id===id), inp=document.getElementById('qty_'+id); if(!pkg||!inp) return;
+  let qty=parseInt(inp.value)||VOLUME_MIN; if(qty<VOLUME_MIN)qty=VOLUME_MIN; inp.value=qty;
+  const t=document.getElementById('tot_'+id); if(t)t.textContent='$'+volumePackPrice(pkg,qty).toLocaleString();
+  const d=document.getElementById('disc_'+id); if(d)d.textContent=Math.round(volumeDiscount(qty)*100)+'% volume off';
+}
+function buyVolumePack(id){
+  const pkg=PACKAGES.find(p=>p.id===id), inp=document.getElementById('qty_'+id);
+  let qty=parseInt(inp&&inp.value)||VOLUME_MIN; if(qty<VOLUME_MIN)qty=VOLUME_MIN;
+  openPackageCheckout(pkg, qty, volumePackPrice(pkg,qty));
+}
+function buyPackage(id){ const pkg=PACKAGES.find(p=>p.id===id); if(pkg) openPackageCheckout(pkg, pkgTargetCount(pkg), pkg.price); }
+function openPackageCheckout(pkg, qty, price){
+  if(price==null) price=pkg.price; if(qty==null) qty=pkgTargetCount(pkg, qty);
   const bal=getBalance();
   modal('Checkout · '+pkg.name, `
-    <div class="kv"><div class="k">Package</div><div>${pkg.name}</div><div class="k">Includes</div><div>${pkgContents(pkg)}</div></div>
-    <div class="alert ok" style="display:flex;justify-content:space-between;align-items:center"><span>Total</span><b style="font-size:22px">$${pkg.price.toLocaleString()}</b></div>
+    <div class="kv"><div class="k">Package</div><div>${pkg.name}</div><div class="k">Includes</div><div>${pkgContents(pkg, qty)}</div></div>
+    <div class="alert ok" style="display:flex;justify-content:space-between;align-items:center"><span>Total</span><b style="font-size:22px">$${price.toLocaleString()}</b></div>
     <div id="ccErr"></div>
     <h3 style="font-size:15px;margin:10px 0 8px"><i class="ph-bold ph-credit-card"></i> Pay with card</h3>
     ${cardFormHTML()}
-    <button class="btn btn-teal" style="width:100%;margin-top:6px" onclick="confirmBuyPackage('${pkg.id}',true)"><i class="ph ph-lock-simple"></i> Pay $${pkg.price.toLocaleString()} &amp; unlock</button>
-    ${bal>=pkg.price?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="confirmBuyPackage('${pkg.id}',false)">or use wallet balance ($${bal.toLocaleString()})</button>`:''}
+    <button class="btn btn-teal" style="width:100%;margin-top:6px" onclick="confirmBuyPackage('${pkg.id}',true,${qty},${price})"><i class="ph ph-lock-simple"></i> Pay $${price.toLocaleString()} &amp; unlock</button>
+    ${bal>=price?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="confirmBuyPackage('${pkg.id}',false,${qty},${price})">or use wallet balance ($${bal.toLocaleString()})</button>`:''}
     <div class="note info" style="margin-top:10px">🔒 Demo checkout — no real charge. Production routes through Stripe's secure card field.</div>
   `);
 }
-function selectPackLeads(pkg){
+function selectPackLeads(pkg, qty){
   const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
   const states=SESSION.states||[];
   const chosen=[], chosenIds=new Set();
@@ -1069,24 +1111,30 @@ function selectPackLeads(pkg){
   const pool=availableLeads().filter(l=>!owned.has(l.id))
     .sort((a,b)=>{const as=states.includes(a.state)?1:0,bs=states.includes(b.state)?1:0; return (bs-as) || (b.score.score-a.score.score);});
   const take=(fn,n)=>{ pool.filter(l=>!chosenIds.has(l.id)&&fn(l)).slice(0,n).forEach(l=>{chosen.push(l);chosenIds.add(l.id);}); };
-  if(pkg.kind==='volume_exclusive') take(l=>l.type==='exclusive',pkg.count);
+  if(pkg.kind==='volume'){
+    qty=qty||VOLUME_MIN;
+    ['A','B','C','D'].forEach(t=>{ const n=Math.round(qty*(pkg.mix[t]||0)); if(n>0) take(l=>l.type==='exclusive'&&l.score.tier===t,n); });
+    if(chosen.length<qty) take(l=>l.type==='exclusive', qty-chosen.length);
+    if(chosen.length>qty) chosen.length=qty; // never over-deliver vs. the quantity paid for
+  }
   else if(pkg.kind==='aged') take(l=>l.type==='aged',pkg.count);
   else if(pkg.kind==='category') take(l=>l.type==='exclusive'&&(l.category||categorize(l.a))===pkg.category,pkg.count);
   else if(pkg.kind==='mixed') pkg.mix.forEach(m=>take(l=>(l.category||categorize(l.a))===m.category,m.count));
   return chosen;
 }
-function confirmBuyPackage(id, byCard){
+function confirmBuyPackage(id, byCard, qty, price){
   const pkg=PACKAGES.find(p=>p.id===id); if(!pkg) return;
+  const target=pkg.kind==='volume'?(qty||VOLUME_MIN):pkgTargetCount(pkg);
+  if(price==null) price=pkg.price;
   if(byCard){ const err=validateCard(); if(err){ const e=document.getElementById('ccErr'); if(e)e.innerHTML=`<div class="alert bad">${err}</div>`; return; }
     if(!(SESSION.savedCard&&val('cc_num').includes('••••'))&&document.getElementById('cc_save')?.checked){ SESSION.savedCard={last4:val('cc_num').replace(/\D/g,'').slice(-4)}; }
-  } else if(getBalance()<pkg.price){ closeModal(); openAddFunds(); return; }
-  const leads=selectPackLeads(pkg);
-  const target=pkgTargetCount(pkg);
-  const perLead=Math.round(pkg.price/Math.max(leads.length,1));
+  } else if(getBalance()<price){ closeModal(); openAddFunds(); return; }
+  const leads=selectPackLeads(pkg, target);
+  const perLead=Math.round(price/Math.max(leads.length,1));
   SESSION.purchased=SESSION.purchased||[];
   leads.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:perLead,status:'new',snapshot:l,boughtAt:Date.now(),source:'package:'+pkg.id}); l.exclusiveSoldTo=SESSION.id; });
-  if(byCard) logTxn('purchase',-pkg.price,`Package: ${pkg.name}`); else chargeWallet(pkg.price,`Package: ${pkg.name}`);
-  const order=recordOrder([{desc:`${pkg.name} — ${leads.length} of ${target} leads delivered now`,price:pkg.price}], pkg.price, byCard?(SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card'):'Wallet balance');
+  if(byCard) logTxn('purchase',-price,`Package: ${pkg.name}`); else chargeWallet(price,`Package: ${pkg.name}`);
+  const order=recordOrder([{desc:`${pkg.name} — ${leads.length} of ${target} leads delivered now`,price:price}], price, byCard?(SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card'):'Wallet balance');
   persistSession(); saveLeads();
   closeModal(); nav('myleads'); receiptModal(order);
   if(leads.length<target){ showToast(`<div><i class="ph-bold ph-info tic" style="color:var(--gold)"></i><b>${leads.length} of ${target} leads delivered now</b></div><div class="tmeta">The remaining ${target-leads.length} are reserved and arrive as new matching leads come in.</div>`,8000); }
