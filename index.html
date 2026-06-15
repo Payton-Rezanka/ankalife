@@ -3,7 +3,19 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>AnkaLife — AI Life Insurance Lead Platform</title>
+<title>AnkaLife — Exclusive Life Insurance Leads &amp; Free Quotes</title>
+<meta name="description" content="AnkaLife is a marketplace of scored, consent-verified, exclusive life-insurance leads for licensed agents — final expense, term, mortgage protection, veteran and more. Shopping for coverage? Get free quotes from a licensed agent.">
+<!-- Social / link-preview (Open Graph + Twitter) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AnkaLife">
+<meta property="og:title" content="AnkaLife — Exclusive Life Insurance Leads & Free Quotes">
+<meta property="og:description" content="Scored, consent-verified, exclusive life-insurance leads for agents. Shopping for coverage? Get free quotes from a licensed agent in minutes.">
+<meta property="og:url" content="https://ankalifeleads.com">
+<meta property="og:image" content="https://ankalifeleads.com/icon-512.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="AnkaLife — Life Insurance Leads & Free Quotes">
+<meta name="twitter:description" content="Exclusive, consent-verified life-insurance leads for agents — and free quotes for families.">
+<meta name="twitter:image" content="https://ankalifeleads.com/icon-512.png">
 <!-- PWA: installable app on iOS + Android -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#082a2b">
@@ -542,8 +554,7 @@ function seedLeads(){
   const types=["exclusive","exclusive","exclusive","exclusive","aged","aged"];
   const tf=["asap","30days","90days:","researching"];
   const cov=["5-10k","10-20k","20-35k","35-50k","50-100k","100-200k","200k+"];
-  const trig=["newbaby","mortgage","marriage","business","debt","none"];
-  const bud=["150+","75-150","40-75","<40","unsure"];
+  const trig=["newbaby","mortgage","marriage","finalexpense","debt","none"];
   const inc=["150k+","100-150k","60-100k","40-60k","25-40k","15-25k","<15k"];
   const hlth=["excellent","good","fair","poor"];
   const ex=["none","some","old"];
@@ -552,7 +563,7 @@ function seedLeads(){
     const anytime=Math.random()<0.45;
     const a={
       age: 24+Math.floor(Math.random()*55),
-      timeframe:rnd(tf), coverage:rnd(cov), trigger:rnd(trig), budget:rnd(bud),
+      timeframe:rnd(tf), coverage:rnd(cov), trigger:rnd(trig),
       income:rnd(inc), health:rnd(hlth), existing:rnd(ex),
       tobacco: Math.random()<0.22?"yes":"no",
       gender: rnd(["male","female"]),
@@ -577,7 +588,10 @@ function seedLeads(){
   return out;
 }
 let LEADS = DB.get('leads', null);
-if(!LEADS){ LEADS=seedLeads(); DB.set('leads',LEADS); }
+/* Persist only LOCAL leads — cloud leads live in Supabase and are merged at runtime,
+   so we never write them back into this device's storage (keeps local data clean). */
+function saveLeads(){ DB.set('leads', LEADS.filter(l=>!l.cloud)); }
+if(!LEADS){ LEADS=seedLeads(); saveLeads(); }
 
 /* ---------- Accounts ---------- */
 function accounts(){return DB.get('accounts',[])}
@@ -1073,7 +1087,7 @@ function confirmBuyPackage(id, byCard){
   leads.forEach(l=>{ SESSION.purchased.push({id:l.id,paid:perLead,status:'new',snapshot:l,boughtAt:Date.now(),source:'package:'+pkg.id}); l.exclusiveSoldTo=SESSION.id; });
   if(byCard) logTxn('purchase',-pkg.price,`Package: ${pkg.name}`); else chargeWallet(pkg.price,`Package: ${pkg.name}`);
   const order=recordOrder([{desc:`${pkg.name} — ${leads.length} of ${target} leads delivered now`,price:pkg.price}], pkg.price, byCard?(SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card'):'Wallet balance');
-  persistSession(); DB.set('leads',LEADS);
+  persistSession(); saveLeads();
   closeModal(); nav('myleads'); receiptModal(order);
   if(leads.length<target){ showToast(`<div><i class="ph-bold ph-info tic" style="color:var(--gold)"></i><b>${leads.length} of ${target} leads delivered now</b></div><div class="tmeta">The remaining ${target-leads.length} are reserved and arrive as new matching leads come in.</div>`,8000); }
 }
@@ -1195,7 +1209,7 @@ function bulkBuyConfirm(n, byCard){
   if(byCard){ logTxn('purchase', -total, `Bulk purchase (card) — ${list.length} leads`); }
   else { chargeWallet(total, `Bulk purchase — ${list.length} leads`); }
   const order=recordOrder(list.map(leadLineItem), total, byCard?(SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card'):'Wallet balance');
-  persistSession(); DB.set('leads',LEADS);
+  persistSession(); saveLeads();
   closeModal(); nav('myleads'); receiptModal(order);
 }
 function leadCard(l,owned){
@@ -1244,9 +1258,9 @@ function ownedLeads(){
 }
 function exportLeadsCSV(){
   const b=ownedLeads();
-  const cols=["First","Last","State","Age","Phone","Email","Tier","Score","Type","Coverage","Trigger","Budget","Health","Tobacco","Status","TopCarrier","Paid"];
+  const cols=["First","Last","State","Age","Phone","Email","Tier","Score","Category","Intent","InsuranceType","Coverage","Trigger","Health","Tobacco","BestTime","Notes","Status","TopCarrier","Paid"];
   const esc=v=>`"${String(v??"").replace(/"/g,'""')}"`;
-  const rows=b.map(l=>[l.first,l.last,l.state,l.a.age,l.phone,l.email,l.score.tier,l.score.score,l.type,covLabel(l.a.coverage),trigLabel(l.a.trigger),l.a.budget,l.a.health,l.a.tobacco,statusLabel(l.status),l.recs[0].name,l.paid].map(esc).join(","));
+  const rows=b.map(l=>[l.first,l.last,l.state,l.a.age,l.phone,l.email,l.score.tier,l.score.score,l.category||categorize(l.a),l.a.likelihood||"",l.a.productType||"",covLabel(l.a.coverage),trigLabel(l.a.trigger),l.a.health,l.a.tobacco,contactLabel(l.a),l.a.notes||"",statusLabel(l.status),l.recs[0].name,l.paid].map(esc).join(","));
   const csv=[cols.join(","),...rows].join("\n");
   const blob=new Blob([csv],{type:"text/csv"}); const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download="anka-leads.csv"; a.click(); URL.revokeObjectURL(url);
@@ -1544,7 +1558,7 @@ function startAICall(){
 function endCall(l){
   CALL.playing=false; clearInterval(CALL.timer);
   // update lead status in market + any owner ownership
-  l.status="appt"; DB.set('leads',LEADS);
+  l.status="appt"; saveLeads();
   logCall(l,"appt",CALL.sec);
   const ql=document.getElementById('callLogMini'); if(ql) ql.innerHTML=callLogRows(3);
 }
@@ -2023,7 +2037,7 @@ function submitSurvey(){
       text:"Consent to be contacted by AnkaLife & its licensed agents (incl. autodialer, AI/prerecorded voice, SMS, email) about life insurance; opt out anytime via STOP." } };
   L.price=priceLead(L);
   const refAgent=attributeReferral(L);
-  LEADS.unshift(L); DB.set('leads',LEADS); DB.set('ref',null);
+  LEADS.unshift(L); saveLeads(); DB.set('ref',null);
   cloudInsertLead(L);   // <-- write the real lead to the shared cloud database
   SV={step:0,a:{}};
   document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
@@ -2144,7 +2158,7 @@ function confirmBuyCard(id){
   grantLead(l);
   logTxn('purchase', -l.price, `Lead (card): ${l.first} ${l.last[0]}. · ${l.state}`);
   const order=recordOrder([leadLineItem(l)], l.price, SESSION.savedCard?`Card ••••${SESSION.savedCard.last4}`:'Card');
-  persistSession(); DB.set('leads',LEADS);
+  persistSession(); saveLeads();
   closeModal(); nav('myleads'); receiptModal(order);
 }
 function confirmBuy(id){
@@ -2153,7 +2167,7 @@ function confirmBuy(id){
   grantLead(l);
   chargeWallet(l.price, `Lead: ${l.first} ${l.last[0]}. · ${l.state}`);
   const order=recordOrder([leadLineItem(l)], l.price, 'Wallet balance');
-  persistSession(); DB.set('leads',LEADS);
+  persistSession(); saveLeads();
   closeModal(); nav('myleads'); receiptModal(order);
 }
 function persistSession(){
@@ -2304,7 +2318,7 @@ function submitPolicy(id){
   const p=(SESSION.purchased||[]).find(x=>x.id===id);
   const l=p?.snapshot||LEADS.find(x=>x.id===id);
   if(p){ p.status='sold'; p.policy={carrier,product,face,ap,monthly:mo,num,at:Date.now()}; persistSession(); }
-  const gl=LEADS.find(x=>x.id===id); if(gl){ gl.status='sold'; DB.set('leads',LEADS); }
+  const gl=LEADS.find(x=>x.id===id); if(gl){ gl.status='sold'; saveLeads(); }
   const freshTag = l ? (freshKey(l)==='fresh'?'Fresh':'Aged') : 'Fresh';
   addPlacement({state:l?l.state:'US', carrier, face, category:l?(l.category||categorize(l.a)):'life', freshTag, ap});
   closeModal();
