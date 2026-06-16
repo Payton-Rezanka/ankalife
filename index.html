@@ -628,6 +628,230 @@ function verifyLicense(app){
 }
 
 /* ---------- Router ---------- */
+/* ============================================================
+   AnkaLife — REAL CHECKOUT BRIDGE (Phase 1)
+   Connects the site to the Google Apps Script backend + Stripe.
+   • Demo mode (ENABLED:false) = everything below is dormant; no real charges.
+   • Live mode  (ENABLED:true + BACKEND_URL) = real Sheet inventory, real Stripe
+     checkout, server-verified fulfillment.
+   To go live: paste your Web app URL (…/exec) into BACKEND_URL, flip ENABLED to
+   true, re-publish the site. See apps-script/SETUP.md.
+   ============================================================ */
+const ANKA = {
+  BACKEND_URL: '',   // ← Apps Script Web app URL ending in /exec
+  ENABLED: false     // ← set true to use real inventory + Stripe checkout
+};
+function ankaEnabled(){ return !!(ANKA.ENABLED && ANKA.BACKEND_URL); }
+
+/* Load TrustedForm (captures the TCPA consent certificate) — live mode only. */
+function ankaLoadTrustedForm(){
+  if(!ANKA.ENABLED || document.getElementById('anka-tf')) return;
+  var tf=document.createElement('script'); tf.id='anka-tf'; tf.type='text/javascript'; tf.async=true;
+  tf.src=(document.location.protocol==='https:'?'https':'http')+'://api.trustedform.com/trustedform.js?field=xxTrustedFormCertUrl&l='+new Date().getTime()+Math.random();
+  var s=document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(tf,s);
+}
+if(typeof window!=='undefined'){ window.addEventListener('DOMContentLoaded', ankaLoadTrustedForm); }
+
+/* Write a consented survey lead into the Sheet backend (the funnel intake). */
+async function ankaCreateLead(L, cert){
+  try{
+    await fetch(ANKA.BACKEND_URL, {
+      method:'post', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'createLead',
+        first:L.first, last:L.last, state:L.state, city:L.city||'',
+        phone:L.phone, email:L.email, type:L.type||'shared', category:L.category,
+        score:(L.score&&L.score.score)||'', tier:(L.score&&L.score.tier)||'C',
+        consent_cert: cert||'', source:'Web opt-in survey' })
+    });
+  }catch(e){ /* consumer already saw the thank-you screen; don't surface errors */ }
+}
+
+async function ankaCheckout(payload){
+  const email = (typeof SESSION!=='undefined' && SESSION && SESSION.email) ? SESSION.email : '';
+  if(!email){ alert('Please sign in with your agent email before buying.'); return; }
+  if(!ANKA.BACKEND_URL){ alert('Checkout is not configured yet.'); return; }
+  try{
+    if(typeof showToast==='function') showToast('<b>Opening secure checkout…</b>',4000);
+    const res = await fetch(ANKA.BACKEND_URL, {
+      method:'post',
+      headers:{'Content-Type':'text/plain;charset=utf-8'}, // 'simple' request → avoids CORS preflight to Apps Script
+      body: JSON.stringify(Object.assign({action:'createCheckout', agentEmail:email}, payload))
+    });
+    const data = await res.json();
+    if(data && data.ok && data.url){ window.location.href = data.url; }
+    else if(data && data.error==='verify_required'){
+      if(typeof showToast==='function') showToast('<b>Verify your license first</b><div class="tmeta">'+(data.message||'')+'</div>',6000);
+      if(typeof nav==='function') nav('marketplace'); // the marketplace shows the verification form
+    }
+    else { alert('Checkout error: ' + ((data&&data.error)||'unknown')); }
+  }catch(err){ alert('Could not reach checkout. ' + err); }
+}
+
+/* Live marketplace = synchronous shell + async inventory load. */
+function ankaMarketplaceHTML(){
+  return `<div class="page-head"><div><h1>Buy Leads</h1>
+    <p>Live inventory — scored, consented leads. Shared leads sell to up to 3 agents; exclusive to one.</p></div>
+    <button class="btn btn-outline btn-sm" onclick="ankaLoadInventory()"><i class="ph ph-arrows-clockwise"></i> Refresh</button></div>
+    <div id="ankaBundles" style="margin-bottom:18px"></div>
+    <div id="ankaInv" class="grid-3"><div class="empty"><div class="ic"><i class="ph-duotone ph-circle-notch"></i></div><p>Loading live inventory…</p></div></div>`;
+}
+async function ankaLoadInventory(){
+  const inv=document.getElementById('ankaInv'), bun=document.getElementById('ankaBundles');
+  const email=(typeof SESSION!=='undefined' && SESSION && SESSION.email)?SESSION.email:'';
+  // License gate: unverified buyers see the verification form instead of inventory.
+  try{
+    const ar=await fetch(ANKA.BACKEND_URL+'?action=agent&email='+encodeURIComponent(email)).then(r=>r.json());
+    const ag=ar&&ar.agent;
+    if(!ag || ag.verify_status!=='approved'){
+      if(bun) bun.innerHTML='';
+      if(inv) inv.innerHTML=ankaVerifyFormHTML(ag);
+      return;
+    }
+  }catch(e){ /* if the status check fails, let the server-side gate handle buys */ }
+  try{
+    const [li, bd] = await Promise.all([
+      fetch(ANKA.BACKEND_URL+'?action=inventory').then(r=>r.json()),
+      fetch(ANKA.BACKEND_URL+'?action=bundles').then(r=>r.json())
+    ]);
+    if(bun && bd && bd.ok){ bun.innerHTML = ankaBundlesHTML(bd.bundles||[]); }
+    if(inv){
+      const leads=(li&&li.ok&&li.leads)||[];
+      inv.innerHTML = leads.length
+        ? leads.map(ankaLeadCardHTML).join('')
+        : `<div class="empty"><div class="ic"><i class="ph-duotone ph-folder-open"></i></div><p>No leads in stock yet. Add leads via your funnel or the Leads tab in your Sheet.</p></div>`;
+    }
+  }catch(err){
+    if(inv) inv.innerHTML=`<div class="alert bad">Couldn't load inventory: ${err}</div>`;
+  }
+}
+function ankaLeadCardHTML(l){
+  const tier=l.tier||'—';
+  return `<div class="lead-card">
+    <div class="lead-top">
+      <div><div class="lead-name">${l.state||''}${l.city&&l.city!=='—'?' · '+l.city:''}</div>
+      <div class="lead-sub">${l.category||'Life'} · ${l.type==='exclusive'?'Exclusive':'Shared (max 3)'}</div></div>
+      <div class="score-badge tier${tier}"><div class="n">${l.score||''}</div><small>TIER ${tier}</small></div>
+    </div>
+    <div class="lead-meta">
+      <div class="lead-price">$${l.price}</div>
+      <button class="btn btn-teal btn-sm" onclick="ankaCheckout({kind:'single',leadId:'${l.id}'})">Buy $${l.price}</button>
+    </div>
+  </div>`;
+}
+function ankaBundlesHTML(bundles){
+  if(!bundles.length) return '';
+  const card=b=>`<div class="card feature">
+    <h3>${b.name}</h3>
+    <div style="font-size:13px;color:var(--teal);font-weight:700;margin:4px 0 8px">${b.qty} ${b.type_filter} leads · tier ${b.tier_filter}</div>
+    <div style="margin:6px 0 10px"><span style="font-size:24px;font-weight:800;font-family:var(--font-display)">$${Number(b.price).toLocaleString()}</span> <span class="chip">$${b.price_per_lead}/lead</span></div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">${b.in_stock} in stock now</div>
+    <button class="btn btn-teal" style="width:100%" ${b.in_stock<b.qty?'disabled':''} onclick="ankaCheckout({kind:'bundle',bundleId:'${b.id}'})"><i class="ph ph-shopping-cart"></i> ${b.in_stock<b.qty?'Out of stock':'Buy bundle'}</button>
+  </div>`;
+  return `<h3 style="margin:8px 0 12px;font-size:17px">Bundles</h3><div class="grid-3">${bundles.map(card).join('')}</div>`;
+}
+
+/* License verification gate (NIPR, simulated server-side). */
+function ankaVerifyFormHTML(ag){
+  const denied = ag && ag.verify_status==='denied';
+  const opts = (typeof STATES!=='undefined'?STATES:[]).map(s=>`<option value="${s}">${s}</option>`).join('');
+  return `<div class="card feature" style="grid-column:1/-1;max-width:600px">
+    <h3><i class="ph-duotone ph-shield-check" style="color:var(--teal)"></i> Verify your license to buy leads</h3>
+    <p style="color:var(--muted);font-size:13.5px">Every buyer is checked against the NIPR Producer Database before purchasing. Takes a few seconds.</p>
+    ${denied?`<div class="alert bad">Your last verification wasn't approved — correct the details below and try again.</div>`:''}
+    <div id="ankaVerifyErr"></div>
+    <div class="field"><label>Full name</label><input id="av_name" placeholder="Your name" value="${(typeof SESSION!=='undefined'&&SESSION&&SESSION.name)||''}"></div>
+    <div class="field"><label>Agency (optional)</label><input id="av_agency" placeholder="Agency name"></div>
+    <div class="two">
+      <div class="field"><label>NPN (National Producer Number)</label><input id="av_npn" inputmode="numeric" placeholder="e.g. 1234567"></div>
+      <div class="field"><label>Resident license state</label><select id="av_state"><option value="">Select…</option>${opts}</select></div>
+    </div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0 10px"><input type="checkbox" id="av_life" checked> I hold an active <b>Life</b> line of authority</label>
+    <button class="btn btn-teal" style="width:100%" onclick="ankaSubmitVerify()"><i class="ph ph-shield-check"></i> Verify &amp; unlock buying</button>
+  </div>`;
+}
+async function ankaSubmitVerify(){
+  const email=(typeof SESSION!=='undefined'&&SESSION&&SESSION.email)?SESSION.email:'';
+  const g=id=>document.getElementById(id);
+  const npn=(g('av_npn')||{}).value||'', state=(g('av_state')||{}).value||'', name=(g('av_name')||{}).value||'', agency=(g('av_agency')||{}).value||'';
+  const life=g('av_life')?g('av_life').checked:true;
+  const errBox=g('ankaVerifyErr');
+  try{
+    const res=await fetch(ANKA.BACKEND_URL,{method:'post',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'verifyAgent', email, npn, license_state:state, name, agency, line_life:life, states:state?[state]:[]})}).then(r=>r.json());
+    if(res&&res.ok&&res.approved){
+      if(typeof showToast==='function') showToast('<b>License verified ✅</b><div class="tmeta">You can now buy leads.</div>',5000);
+      ankaLoadInventory();
+    }else{
+      const reasons=(res&&res.reasons&&res.reasons.length)?res.reasons:['Verification failed. Check your details and try again.'];
+      if(errBox) errBox.innerHTML=`<div class="alert bad">${reasons.join('<br>')}</div>`;
+    }
+  }catch(err){ if(errBox) errBox.innerHTML=`<div class="alert bad">Could not verify: ${err}</div>`; }
+}
+
+/* Live "My Leads" — purchased leads with UNLOCKED contact, from the backend. */
+function ankaMyLeadsHTML(){
+  return `<div class="page-head"><div><h1>My Leads</h1>
+    <p>Leads you've purchased — full contact details unlocked.</p></div>
+    <button class="btn btn-outline btn-sm" onclick="ankaLoadMyLeads()"><i class="ph ph-arrows-clockwise"></i> Refresh</button></div>
+    <div id="ankaMine"><div class="empty"><div class="ic"><i class="ph-duotone ph-circle-notch"></i></div><p>Loading your leads…</p></div></div>`;
+}
+async function ankaLoadMyLeads(){
+  const wrap=document.getElementById('ankaMine');
+  const email=(typeof SESSION!=='undefined' && SESSION && SESSION.email)?SESSION.email:'';
+  if(!wrap) return;
+  if(!email){ wrap.innerHTML=`<div class="alert bad">Sign in with your agent email to see your purchased leads.</div>`; return; }
+  try{
+    const r=await fetch(ANKA.BACKEND_URL+'?action=myleads&email='+encodeURIComponent(email)).then(x=>x.json());
+    const leads=(r&&r.ok&&r.leads)||[];
+    if(!leads.length){ wrap.innerHTML=`<div class="empty"><div class="ic"><i class="ph-duotone ph-clipboard-text"></i></div><p>No purchased leads yet. <a onclick="nav('marketplace')">Browse the marketplace →</a></p></div>`; return; }
+    window.__ankaMine=leads;
+    wrap.innerHTML=`<div class="page-head" style="border:0;padding:0;margin-bottom:10px"><div><p>${leads.length} lead${leads.length>1?'s':''} purchased · contact unlocked.</p></div>
+      <button class="btn btn-outline btn-sm" onclick="ankaExportMyLeads()"><i class="ph ph-download-simple"></i> Export CSV</button></div>
+      <div class="lead-grid">${leads.map(ankaMyLeadCardHTML).join('')}</div>`;
+  }catch(err){ wrap.innerHTML=`<div class="alert bad">Couldn't load your leads: ${err}</div>`; }
+}
+function ankaMyLeadCardHTML(l){
+  const tier=l.tier||'—';
+  return `<div class="lead-card">
+    <div class="lead-top">
+      <div><div class="lead-name">${l.first||''} ${l.last||''}</div>
+      <div class="lead-sub">${l.state||''}${l.city&&l.city!=='—'?' · '+l.city:''} · ${l.category||'Life'}</div></div>
+      <div class="score-badge tier${tier}"><div class="n">${l.score||''}</div><small>TIER ${tier}</small></div>
+    </div>
+    <div style="font-size:13.5px;margin:8px 0;line-height:1.8">
+      <div><i class="ph ph-phone" style="color:var(--teal)"></i> <a href="tel:${l.phone}">${l.phone||'—'}</a></div>
+      <div><i class="ph ph-envelope-simple" style="color:var(--teal)"></i> <a href="mailto:${l.email}">${l.email||'—'}</a></div>
+    </div>
+    <div class="lead-meta"><div class="lead-price">$${l.price}</div><span class="chip b">${l.type==='exclusive'?'Exclusive':'Shared'}</span></div>
+  </div>`;
+}
+function ankaExportMyLeads(){
+  const b=window.__ankaMine||[];
+  const cols=["First","Last","State","City","Phone","Email","Tier","Score","Category","Type","Price"];
+  const esc=v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`;
+  const rows=b.map(l=>[l.first,l.last,l.state,l.city,l.phone,l.email,l.tier,l.score,l.category,l.type,l.price].map(esc).join(','));
+  const csv=[cols.join(','),...rows].join("\n");
+  const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='anka-my-leads.csv'; a.click(); URL.revokeObjectURL(url);
+}
+
+/* Detect the post-payment return from Stripe and confirm to the buyer. */
+(function ankaReturnNotice(){
+  try{
+    const p=new URLSearchParams(location.search);
+    if(p.get('fulfilled')||p.get('paid')||p.get('pending')){
+      window.addEventListener('DOMContentLoaded',function(){
+        const ok=p.get('fulfilled')||p.get('paid');
+        if(typeof showToast==='function') showToast(ok
+          ?'<b>Payment received ✅</b><div class="tmeta">Your lead\'s contact info is unlocked — see My Leads.</div>'
+          :'<b>Finishing your order…</b>',7000);
+        history.replaceState({},'',location.pathname);
+        if(ok && typeof nav==='function' && typeof SESSION!=='undefined' && SESSION){ setTimeout(()=>nav('myleads'),900); }
+      });
+    }
+  }catch(e){}
+})();
+
 function nav(route){ DB.set('route',route); render(route); window.scrollTo(0,0); }
 function render(route){
   route = route || DB.get('route','home');
@@ -890,6 +1114,8 @@ function surveyResult(){
         <input type="checkbox" id="c_consent" style="margin-top:3px;flex-shrink:0">
         <span>By checking this box and clicking submit, I give my prior <b>express written consent</b> to be contacted by AnkaLife and its licensed agents at the phone number and email above — including by autodialer, prerecorded/AI voice, SMS, and email — about life insurance, even if my number is on a Do-Not-Call list. Consent isn't a condition of purchase; I can opt out anytime by replying STOP. I agree to the Privacy Policy & Terms.</span>
       </label>
+      <!-- TrustedForm writes the TCPA consent certificate URL here (proof the consent happened). -->
+      <input type="hidden" id="xxTrustedFormCertUrl" name="xxTrustedFormCertUrl">
       <button class="btn btn-teal" style="width:100%" onclick="submitSurvey()"><i class="ph-bold ph-paper-plane-tilt"></i> Submit my survey</button>
       <p style="font-size:11.5px;color:var(--muted);margin-top:10px;text-align:center">🔒 Your information is sent only to a licensed, verified agent. We never sell it to unverified parties.</p>
     </div>
@@ -923,8 +1149,8 @@ function appPage(route){
   if(OWNER_ONLY.includes(route) && u.role!=="owner") return ownerOnlyPanel();
   switch(route){
     case "dashboard": return agentDashboard();
-    case "marketplace": return marketplace();
-    case "myleads": return myLeads();
+    case "marketplace": return ankaEnabled() ? ankaMarketplaceHTML() : marketplace();
+    case "myleads": return ankaEnabled() ? ankaMyLeadsHTML() : myLeads();
     case "aicalls": return aiEngine();
     case "campaigns": return campaigns();
     case "wallet": return walletPage();
@@ -1097,9 +1323,12 @@ function updatePackTotal(id){
 function buyVolumePack(id){
   const pkg=PACKAGES.find(p=>p.id===id), inp=document.getElementById('qty_'+id);
   const min=packMin(pkg); let qty=parseInt(inp&&inp.value)||min; if(qty<min)qty=min;
+  if(ankaEnabled()){ ankaCheckout({kind:'pack', packId:id, qty:qty}); return; }
   openPackageCheckout(pkg, qty, packQtyPrice(pkg,qty));
 }
-function buyPackage(id){ const pkg=PACKAGES.find(p=>p.id===id); if(pkg) openPackageCheckout(pkg, pkgTargetCount(pkg), pkg.price); }
+function buyPackage(id){ const pkg=PACKAGES.find(p=>p.id===id); if(!pkg) return;
+  if(ankaEnabled()){ ankaCheckout({kind:'pack', packId:id}); return; }
+  openPackageCheckout(pkg, pkgTargetCount(pkg), pkg.price); }
 function openPackageCheckout(pkg, qty, price){
   if(price==null) price=pkg.price; if(qty==null) qty=pkgTargetCount(pkg, qty);
   const bal=getBalance();
@@ -1991,7 +2220,7 @@ function profile(){
 function bindPublic(route){
   if(route==="survey" && SVQ[SV.step]?.type==="number"){ const n=document.getElementById('sv_num'); if(n&&SV.a.age)n.value=SV.a.age; }
 }
-function bindApp(route){ if(route==="aicalls"){ setTimeout(loadVoices,120); } }
+function bindApp(route){ if(route==="aicalls"){ setTimeout(loadVoices,120); } if(route==="marketplace" && ankaEnabled()){ setTimeout(ankaLoadInventory,60); } if(route==="myleads" && ankaEnabled()){ setTimeout(ankaLoadMyLeads,60); } }
 
 async function doLogin(){
   const email=val('li_email'), pass=val('li_pass');
@@ -2254,10 +2483,14 @@ function submitSurvey(){
       method:"Web form — TCPA prior express written consent",
       text:"Consent to be contacted by AnkaLife & its licensed agents (incl. autodialer, AI/prerecorded voice, SMS, email) about life insurance; opt out anytime via STOP." } };
   L.price=priceLead(L);
+  // TrustedForm consent certificate (proof of TCPA consent) — captured by the hidden field.
+  const tfCert=(document.getElementById('xxTrustedFormCertUrl')||{}).value||'';
+  L.consent.cert=tfCert;
   const refAgent=attributeReferral(L);
   LEADS.unshift(L); saveLeads(); DB.set('ref',null);
   fulfillReservations();   // a new lead may fill an agent's backordered/reserved quantity
-  cloudInsertLead(L);   // <-- write the real lead to the shared cloud database
+  cloudInsertLead(L);   // <-- legacy Supabase stub
+  if(ankaEnabled()){ ankaCreateLead(L, tfCert); }   // <-- write the consented lead into the Sheet backend
   SV={step:0,a:{}};
   document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
     <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">Thanks, ${first} — your survey is in!</h1>
