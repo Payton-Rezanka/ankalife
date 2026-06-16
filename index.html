@@ -692,6 +692,7 @@ function ankaMarketplaceHTML(){
   return `<div class="page-head"><div><h1>Buy Leads</h1>
     <p>Live inventory — scored, consented leads. Shared leads sell to up to 3 agents; exclusive to one.</p></div>
     <button class="btn btn-outline btn-sm" onclick="ankaLoadInventory()"><i class="ph ph-arrows-clockwise"></i> Refresh</button></div>
+    <div id="ankaSource" style="margin-bottom:18px"></div>
     <div id="ankaBundles" style="margin-bottom:18px"></div>
     <div id="ankaInv" class="grid-3"><div class="empty"><div class="ic"><i class="ph-duotone ph-circle-notch"></i></div><p>Loading live inventory…</p></div></div>`;
 }
@@ -714,6 +715,8 @@ async function ankaLoadInventory(){
       fetch(ANKA.BACKEND_URL+'?action=bundles').then(r=>r.json())
     ]);
     if(bun && bd && bd.ok){ bun.innerHTML = ankaBundlesHTML(bd.bundles||[]); }
+    const src=document.getElementById('ankaSource');
+    if(src && bd && bd.ok){ src.innerHTML = ankaSourceHTML(bd.source_price||35); }
     if(inv){
       const leads=(li&&li.ok&&li.leads)||[];
       inv.innerHTML = leads.length
@@ -737,6 +740,27 @@ function ankaLeadCardHTML(l){
       <button class="btn btn-teal btn-sm" onclick="ankaCheckout({kind:'single',leadId:'${l.id}'})">Buy $${l.price}</button>
     </div>
   </div>`;
+}
+/* Broker "Source a fresh lead" widget — agent pays, backend auto-buys from your vendor. */
+function ankaSourceHTML(price){
+  const cats=(typeof CATEGORIES!=='undefined'?CATEGORIES:['Final Expense','Term Life','Mortgage Protection','Veteran','IUL / Wealth','Senior / Medicare']);
+  const states=(typeof STATES!=='undefined'?STATES:[]);
+  return `<div class="card feature" style="border:1px solid var(--teal)">
+    <h3 style="display:flex;align-items:center;gap:8px"><i class="ph-duotone ph-lightning" style="color:var(--gold)"></i> Source a fresh lead — on demand</h3>
+    <p style="color:var(--muted);font-size:13.5px">No waiting on inventory. Pick what you want; we buy it fresh from our network and deliver it to <b>My Leads</b>. Every sourced lead is consent-verified.</p>
+    <div class="two">
+      <div class="field"><label>State</label><select id="src_state"><option value="">Select…</option>${states.map(s=>`<option>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Lead type</label><select id="src_cat">${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Exclusivity</label><select id="src_type"><option value="exclusive">Exclusive (only you)</option><option value="shared">Shared (you + up to 2 others, cheaper)</option></select></div>
+    <button class="btn btn-teal" style="width:100%;margin-top:4px" onclick="ankaSourceBuy()"><i class="ph ph-lightning"></i> Source a lead — $${price}</button>
+  </div>`;
+}
+function ankaSourceBuy(){
+  const g=id=>document.getElementById(id);
+  const state=(g('src_state')||{}).value||'', category=(g('src_cat')||{}).value||'', type=(g('src_type')||{}).value||'exclusive';
+  if(!state){ alert('Please pick a state for the lead you want sourced.'); return; }
+  ankaCheckout({kind:'source', state, category, type});
 }
 function ankaBundlesHTML(bundles){
   if(!bundles.length) return '';

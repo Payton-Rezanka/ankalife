@@ -32,7 +32,7 @@ const TABS = {
 const HEADERS = {
   leads:       ['id','created_at','first','last','state','city','phone','email','type','category','score','tier','price','consent_cert','status','sold_to','times_sold','source'],
   agents:      ['id','created_at','name','agency','email','npn','license_state','verify_status','states','balance','total_spent'],
-  orders:      ['id','created_at','agent_email','kind','lead_ids','bundle_id','qty','amount','stripe_id','status'],
+  orders:      ['id','created_at','agent_email','kind','lead_ids','bundle_id','qty','amount','cost','margin','stripe_id','status'],
   bundles:     ['id','name','qty','tier_filter','type_filter','price','price_per_lead','active'],
   suppression: ['phone_or_email','reason','added_at'],
   config:      ['key','value']
@@ -133,7 +133,13 @@ function seedConfig_(cfg) {
     ['CURRENCY',              'usd'],
     ['SHARED_CAP',            '3'],
     ['SUCCESS_URL',           'https://ankalifeleads.com/?paid=1'],
-    ['CANCEL_URL',            'https://ankalifeleads.com/?canceled=1']
+    ['CANCEL_URL',            'https://ankalifeleads.com/?canceled=1'],
+    // --- Broker (auto-buy) settings ---
+    ['SOURCE_PRICE',          '35'],          // what the agent pays to have a fresh lead sourced
+    ['MARGIN_TARGET_PERCENT', '40'],          // your target markup (informational; margin is tracked per order)
+    ['VENDOR_POST_URL',       'SIMULATE'],    // your lead vendor's ping-post API URL; 'SIMULATE' returns a test lead
+    ['VENDOR_AUTH',           ''],            // e.g. "Bearer abc123" — sent as the Authorization header
+    ['VENDOR_FIELD_MAP',      '{}']           // optional: map vendor response field names to ours, e.g. {"phone":"phone_number","consent_cert":"trusted_form_cert_url"}
   ];
   cfg.getRange(2, 1, defaults.length, 2).setValues(defaults);
 }
@@ -185,7 +191,7 @@ function doGet(e) {
   const action = (e && e.parameter && e.parameter.action) || 'ping';
   try {
     if (action === 'inventory') return json_({ ok: true, leads: availableLeads_() });
-    if (action === 'bundles')   return json_({ ok: true, bundles: activeBundles_() });
+    if (action === 'bundles')   return json_({ ok: true, bundles: activeBundles_(), source_price: Number(cfg_('SOURCE_PRICE') || 35) });
     if (action === 'myleads')   return json_({ ok: true, leads: myLeadsFor_(String((e.parameter.email || '')).toLowerCase()) });
     if (action === 'agent')     return json_({ ok: true, agent: agentStatus_(String((e.parameter.email || '')).toLowerCase()) });
     if (action === 'confirm')   return confirmReturn_(e);   // Stripe sends the buyer here after payment
@@ -266,6 +272,17 @@ function createCheckout_(body) {
     amountCents = Math.round(Number(b.price) * 100);
     metadata = { kind: 'bundle', bundle_id: b.id, qty: String(b.qty), agent_email: agentEmail };
 
+  } else if (body.kind === 'source') {
+    // Broker model: agent pays now, we auto-buy a fresh lead from the vendor on fulfillment.
+    const state = String(body.state || '').toUpperCase();
+    const category = String(body.category || 'Term Life');
+    const type = (body.type === 'shared') ? 'shared' : 'exclusive';
+    if (!state) return { ok: false, error: 'A state is required to source a lead.' };
+    const price = Number(cfg_('SOURCE_PRICE') || 35);
+    lineName = 'AnkaLife sourced ' + category + ' lead (' + state + ', ' + type + ')';
+    amountCents = Math.round(price * 100);
+    metadata = { kind: 'source', state: state, category: category, type: type, agent_email: agentEmail };
+
   } else if (body.kind === 'pack') {
     const pack = findPack_(body.packId);
     if (!pack) return { ok: false, error: 'Package not found.' };
@@ -280,7 +297,7 @@ function createCheckout_(body) {
     metadata = { kind: 'pack', pack_id: pack.id, qty: String(qty), agent_email: agentEmail };
 
   } else {
-    return { ok: false, error: 'kind must be "single", "bundle", or "pack".' };
+    return { ok: false, error: 'kind must be "single", "bundle", "pack", or "source".' };
   }
 
   const session = stripeCheckout_(lineName, amountCents, agentEmail, metadata);
@@ -311,6 +328,65 @@ function createLead_(b) {
   return { ok: true, id: id, price: price };
 }
 
+/* ===================== BROKER: auto-buy from a lead vendor ===================== *
+ * vendorBuy_ posts a request to your configured vendor (ping-post) and returns a
+ * { ok, cost, lead } object. Set VENDOR_POST_URL in Config to your vendor's URL.
+ * Leave it as 'SIMULATE' to return a fake consented lead for testing the flow. */
+function vendorBuy_(spec) {
+  const url = cfg_('VENDOR_POST_URL');
+  if (!url) return { ok: false, error: 'No vendor configured.' };
+  if (url === 'SIMULATE') return vendorSimulate_(spec);
+  try {
+    const headers = {};
+    const auth = cfg_('VENDOR_AUTH');
+    if (auth) headers['Authorization'] = auth;
+    const res = UrlFetchApp.fetch(url, {
+      method: 'post', contentType: 'application/json', headers: headers,
+      payload: JSON.stringify(spec), muteHttpExceptions: true
+    });
+    const data = JSON.parse(res.getContentText());
+    return mapVendorResponse_(data, spec);
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+}
+/* Test vendor — returns a fake consented lead so the broker flow works before a real vendor is wired. */
+function vendorSimulate_(spec) {
+  return { ok: true, cost: 15, lead: {
+    first: 'Sourced', last: 'Lead', state: spec.state, city: '',
+    phone: '(555) 010-2030', email: 'sourced.' + String(spec.state).toLowerCase() + '@example.com',
+    category: spec.category, consent_cert: 'https://cert.trustedform.com/SIMULATED'
+  }};
+}
+/* Map a vendor's JSON response to our lead fields. Customize VENDOR_FIELD_MAP for your vendor. */
+function mapVendorResponse_(data, spec) {
+  var map = {};
+  try { map = JSON.parse(cfg_('VENDOR_FIELD_MAP') || '{}'); } catch (e) {}
+  const get = function (k, def) { const f = map[k] || k; return (data[f] != null) ? data[f] : def; };
+  const lead = {
+    first: get('first', ''), last: get('last', ''), state: get('state', spec.state), city: get('city', ''),
+    phone: get('phone', ''), email: get('email', ''), category: get('category', spec.category),
+    consent_cert: get('consent_cert', '')
+  };
+  if (!lead.phone && !lead.email) return { ok: false, error: 'Vendor returned no contact info.' };
+  return { ok: true, cost: Number(get('cost', 0)), lead: lead };
+}
+/* Write a vendor-sourced lead into the Leads tab and return it. */
+function insertSourcedLead_(l, meta) {
+  const tier = 'B'; // sourced leads default mid-tier unless the vendor supplies a score
+  const type = (meta.type === 'shared') ? 'shared' : 'exclusive';
+  const price = (type === 'shared' ? SHARED_PRICE : EXCL_PRICE)[tier];
+  const id = 'L' + Utilities.getUuid().slice(0, 8);
+  appendRow_(TABS.leads, {
+    id: id, created_at: now_(), first: l.first, last: l.last, state: l.state, city: l.city || '',
+    phone: l.phone, email: l.email, type: type, category: l.category || meta.category,
+    score: tierScore_(tier), tier: tier, price: price,
+    consent_cert: String(l.consent_cert || '').trim() || 'PENDING-NO-CERT',
+    status: 'new', sold_to: '', times_sold: 0, source: 'Brokered (vendor)'
+  });
+  return findLead_(id);
+}
+
 /* ---- payment confirmed -> assign leads, write the order ---- */
 function fulfillOrder_(meta, amountTotal, stripeId) {
   const lock = LockService.getScriptLock();
@@ -319,10 +395,24 @@ function fulfillOrder_(meta, amountTotal, stripeId) {
     if (orderExists_(stripeId)) return; // idempotent — Stripe may retry the webhook
     const agentEmail = meta.agent_email || '';
     let leadIds = [];
+    let cost = 0;                 // what we paid a vendor (broker model); 0 for own inventory
+    let status = 'fulfilled';
 
     if (meta.kind === 'single') {
       const lead = findLead_(meta.lead_ids);
       if (lead && isSellable_(lead)) { assignLead_(lead, agentEmail); leadIds = [lead.id]; }
+
+    } else if (meta.kind === 'source') {
+      // Broker auto-buy: purchase a fresh lead from the vendor, then deliver it.
+      const bought = vendorBuy_({ state: meta.state, category: meta.category, type: meta.type });
+      if (bought.ok) {
+        const lead = insertSourcedLead_(bought.lead, meta);
+        assignLead_(lead, agentEmail);
+        leadIds = [lead.id];
+        cost = Number(bought.cost || 0);
+      } else {
+        status = 'needs_fulfillment'; // vendor failed — flag for manual sourcing (agent already paid)
+      }
 
     } else if (meta.kind === 'bundle') {
       const b = findBundle_(meta.bundle_id);
@@ -339,6 +429,7 @@ function fulfillOrder_(meta, amountTotal, stripeId) {
       leadIds = matches.map(l => l.id);
     }
 
+    const amount = amountTotal / 100;
     appendRow_(TABS.orders, {
       id: 'O' + Utilities.getUuid().slice(0, 8),
       created_at: now_(),
@@ -347,11 +438,13 @@ function fulfillOrder_(meta, amountTotal, stripeId) {
       lead_ids: leadIds.join(','),
       bundle_id: meta.bundle_id || meta.pack_id || '',
       qty: leadIds.length,
-      amount: (amountTotal / 100).toFixed(2),
+      amount: amount.toFixed(2),
+      cost: cost.toFixed(2),
+      margin: (amount - cost).toFixed(2),   // your take = what the agent paid minus vendor cost
       stripe_id: stripeId,
-      status: 'fulfilled'
+      status: status
     });
-    bumpAgentSpend_(agentEmail, amountTotal / 100);
+    bumpAgentSpend_(agentEmail, amount);
   } finally {
     lock.releaseLock();
   }

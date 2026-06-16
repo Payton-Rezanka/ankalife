@@ -127,6 +127,23 @@ consented lead** straight into your `Leads` tab — no vendor, $0 per lead.
 
 ---
 
+## Part 8 — Broker mode: sell leads you don't own yet (optional)
+
+This lets agents buy a **"Source a fresh lead"** — they pay first, the system auto-buys it from
+your vendor, and you keep the margin. **No inventory, no fronting your own money.**
+
+- It's **on by default in SIMULATE mode** — try it now: in the live marketplace, use the
+  *Source a fresh lead* box, pick a state, and check out. A test lead appears in My Leads and a
+  row lands in **Orders** with `amount`, `cost`, and **`margin`** columns.
+- To go live for real, you need a **lead vendor that sells on demand** (a ping-post supplier).
+  Once you have one, open the `Config` tab and set: `VENDOR_POST_URL` (their URL),
+  `VENDOR_AUTH` (your API key), `VENDOR_FIELD_MAP` (field-name mapping), and `SOURCE_PRICE`.
+  Full detail: `docs/BROKER_AND_SERVICES.md`.
+- **Only broker from vendors who pass a consent certificate.** Sourced leads without one are
+  stored as `PENDING-NO-CERT` and stay unsellable until proven.
+
+---
+
 ## Cheat sheet
 
 | Thing | Where |
