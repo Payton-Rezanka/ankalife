@@ -3,6 +3,15 @@
 This connects **ankalifeleads.com** to a **Google Sheet** (your database) and **Stripe**
 (real payments). You'll click buttons and paste a few keys — you won't write code.
 
+> ## 🧪 Want to TEST the whole platform first — no setup, no accounts?
+> Add **`?sandbox=1`** to your site URL: **`https://ankalifeleads.com/?sandbox=1`**
+> Sandbox mode runs a complete **fake backend in your browser** so you can click through
+> *everything* — sign up as an agent, verify a license (use NPN `1234567` + any state),
+> buy leads, buy bundles/packages, **source a lead** (broker), fill out the survey, and
+> (log in as owner `owner@ankalife.ai` / `owner123`) use **Cold Lists** + watch a contact
+> convert. No money moves, nothing saves to a real database. Turn it off with `?sandbox=0`.
+> **This is how you test today.** Do the real setup below when you're ready to take live payments.
+
 You need three free accounts: **Google**, **Stripe**, and your existing site.
 
 ---

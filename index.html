@@ -639,9 +639,77 @@ function verifyLicense(app){
    ============================================================ */
 const ANKA = {
   BACKEND_URL: '',   // ← Apps Script Web app URL ending in /exec
-  ENABLED: false     // ← set true to use real inventory + Stripe checkout
+  ENABLED: false,    // ← set true to use real inventory + Stripe checkout
+  SANDBOX: false     // ← test the whole live platform in-browser (no backend). Turn on with ?sandbox=1
 };
-function ankaEnabled(){ return !!(ANKA.ENABLED && ANKA.BACKEND_URL); }
+function ankaEnabled(){ return ANKA.SANDBOX || !!(ANKA.ENABLED && ANKA.BACKEND_URL); }
+function ankaSandbox(){ return !!ANKA.SANDBOX; }
+
+/* Unified API layer: real backend in live mode, in-browser mock in sandbox mode. */
+async function ankaGet(action, params){
+  if(ankaSandbox()) return ankaSandboxApi('GET', action, params||{});
+  const qs=Object.keys(params||{}).map(k=>k+'='+encodeURIComponent(params[k])).join('&');
+  return fetch(ANKA.BACKEND_URL+'?action='+action+(qs?'&'+qs:'')).then(r=>r.json());
+}
+async function ankaPost(body){
+  if(ankaSandbox()) return ankaSandboxApi('POST', body.action, body);
+  return fetch(ANKA.BACKEND_URL,{method:'post',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)}).then(r=>r.json());
+}
+
+/* ===== SANDBOX: a full in-browser fake of the Apps Script backend (for testing) ===== */
+function ankaSB(){ if(!window.__SB){ try{window.__SB=JSON.parse(localStorage.getItem('anka_sb'))||ankaSBSeed();}catch(e){window.__SB=ankaSBSeed();} } return window.__SB; }
+function ankaSBSave(){ try{ localStorage.setItem('anka_sb', JSON.stringify(window.__SB)); }catch(e){} }
+function ankaSBReset(){ localStorage.removeItem('anka_sb'); window.__SB=null; }
+function ankaSBSeed(){
+  const sc={A:92,B:78,C:62,D:45};
+  const mk=(id,f,l,st,ci,ty,cat,t,pr,ph,em)=>({id,first:f,last:l,state:st,city:ci,phone:ph,email:em,type:ty,category:cat,score:sc[t],tier:t,price:pr,consent_cert:'SANDBOX-cert',status:'new',sold_to:'',times_sold:0});
+  return { leads:[
+    mk('L1','Maria','Reyes','TX','Houston','shared','Final Expense','A',20,'(555) 240-1188','maria@example.com'),
+    mk('L2','Robert','Johnson','FL','Tampa','exclusive','Term Life','A',33,'(555) 511-9043','robert@example.com'),
+    mk('L3','Latisha','Brooks','GA','Atlanta','shared','Mortgage Protection','B',15,'(555) 332-7781','latisha@example.com'),
+    mk('L4','David','Nguyen','CA','Fresno','exclusive','IUL / Wealth','B',25,'(555) 778-2210','david@example.com'),
+    mk('L5','Susan','Walker','NY','Buffalo','shared','Senior / Medicare','C',11,'(555) 904-5567','susan@example.com'),
+    mk('L6','James','Carter','AZ','Mesa','shared','Veteran','A',20,'(555) 210-7788','james@example.com')
+  ], agents:{}, orders:[], cold:[] };
+}
+function ankaSBSellable(l){ const cap=3; return l.consent_cert && l.consent_cert.toUpperCase().indexOf('PENDING')!==0 && (l.type==='exclusive' ? (l.status!=='sold'&&!l.sold_to) : (Number(l.times_sold||0)<cap)); }
+function ankaSBBundles(sb){ const sh=sb.leads.filter(l=>ankaSBSellable(l)&&l.type==='shared').length, ex=sb.leads.filter(l=>ankaSBSellable(l)&&l.type==='exclusive').length;
+  return [ {id:'starter10',name:'Starter 10',qty:10,tier_filter:'A,B',type_filter:'shared',price:200,price_per_lead:20,in_stock:sh},
+           {id:'pro25',name:'Pro 25',qty:25,tier_filter:'any',type_filter:'shared',price:437,price_per_lead:17.5,in_stock:sh},
+           {id:'excl10',name:'Exclusive 10',qty:10,tier_filter:'A',type_filter:'exclusive',price:750,price_per_lead:75,in_stock:ex} ]; }
+function ankaSBFulfill(sb,p){
+  const em=String(p.agentEmail||'').toLowerCase(); const a=sb.agents[em];
+  if(!a||a.verify_status!=='approved') return {ok:false,error:'verify_required',message:'Your license must be verified before buying.'};
+  const cap=3; const assign=l=>{ l.times_sold=(l.times_sold||0)+1; if(l.type==='exclusive'||l.times_sold>=cap) l.status='sold'; l.sold_to=(l.sold_to?l.sold_to+',':'')+em; };
+  let ids=[],cost=0,amount=0;
+  if(p.kind==='single'){ const l=sb.leads.find(x=>x.id===p.leadId); if(l&&ankaSBSellable(l)){ assign(l); ids=[l.id]; amount=l.price; } }
+  else if(p.kind==='source'){ const t='B',pr={A:33,B:25,C:18,D:12}[t],id='L'+Date.now(); const l={id,first:'Sourced',last:'Lead',state:p.state,city:'',phone:'(555) 010-2030',email:'sourced@example.com',type:p.type||'exclusive',category:p.category,score:78,tier:t,price:pr,consent_cert:'SANDBOX-cert',status:'new',sold_to:'',times_sold:0}; sb.leads.push(l); assign(l); ids=[l.id]; cost=15; amount=35; }
+  else if(p.kind==='bundle'){ const b=ankaSBBundles(sb).find(x=>x.id===p.bundleId); if(b){ const m=sb.leads.filter(l=>ankaSBSellable(l)&&(b.type_filter==='any'||l.type===b.type_filter)).slice(0,b.qty); m.forEach(assign); ids=m.map(l=>l.id); amount=b.price; } }
+  else if(p.kind==='pack'){ const m=sb.leads.filter(ankaSBSellable).slice(0,10); m.forEach(assign); ids=m.map(l=>l.id); amount=300; }
+  sb.orders.push({agent_email:em,kind:p.kind,lead_ids:ids,amount,cost,margin:amount-cost}); ankaSBSave();
+  return {ok:true,sandbox:true,kind:p.kind,delivered:ids.length};
+}
+function ankaSandboxApi(method, action, p){
+  const sb=ankaSB(); const sc={A:92,B:78,C:62,D:45};
+  if(method==='GET'){
+    if(action==='agent'){ return Promise.resolve({ok:true,agent:sb.agents[String(p.email||'').toLowerCase()]||null}); }
+    if(action==='inventory'){ return Promise.resolve({ok:true,leads:sb.leads.filter(ankaSBSellable).map(l=>({id:l.id,state:l.state,city:l.city,type:l.type,category:l.category,score:l.score,tier:l.tier,price:l.price}))}); }
+    if(action==='bundles'){ return Promise.resolve({ok:true,bundles:ankaSBBundles(sb),source_price:35}); }
+    if(action==='myleads'){ const em=String(p.email||'').toLowerCase(),ids={}; sb.orders.filter(o=>o.agent_email===em).forEach(o=>(o.lead_ids||[]).forEach(id=>ids[id]=1)); return Promise.resolve({ok:true,leads:sb.leads.filter(l=>ids[l.id]).map(l=>({id:l.id,first:l.first,last:l.last,state:l.state,city:l.city,phone:l.phone,email:l.email,type:l.type,category:l.category,score:l.score,tier:l.tier,price:l.price,status:l.status}))}); }
+    if(action==='cold'){ if(!(typeof SESSION!=='undefined'&&SESSION&&SESSION.role==='owner')) return Promise.resolve({ok:false,error:'Not authorized (owner only).'}); return Promise.resolve({ok:true,cold:sb.cold,stats:{total:sb.cold.length,converted:sb.cold.filter(c=>c.status==='converted').length},survey_url:location.origin+'/#survey'}); }
+  } else {
+    if(action==='verifyAgent'){ const ok=/^\d{4,10}$/.test(p.npn||'')&&!!p.license_state; sb.agents[String(p.email||'').toLowerCase()]={email:p.email,verify_status:ok?'approved':'denied',name:p.name,license_state:p.license_state}; ankaSBSave(); return Promise.resolve({ok:true,approved:ok,reasons:ok?[]:['NPN must be a 4–10 digit number per the NIPR Producer Database.']}); }
+    if(action==='createCheckout'){ return Promise.resolve(ankaSBFulfill(sb,p)); }
+    if(action==='createLead'){ const t=String(p.tier||'C'),ty=p.type==='exclusive'?'exclusive':'shared'; const pr=(ty==='shared'?{A:20,B:15,C:11,D:8}:{A:33,B:25,C:18,D:12})[t]||11; const id='L'+Date.now(); sb.leads.unshift({id,first:p.first,last:p.last,state:p.state,city:p.city||'',phone:p.phone,email:p.email,type:ty,category:p.category||'Term Life',score:sc[t]||60,tier:t,price:pr,consent_cert:p.consent_cert||'PENDING-NO-CERT',status:'new',sold_to:'',times_sold:0}); const ph=String(p.phone||'').replace(/\D/g,''),emm=String(p.email||'').toLowerCase(); sb.cold.forEach(c=>{ if(c.status!=='converted'){ const cph=String(c.phone||'').replace(/\D/g,''),cem=String(c.email||'').toLowerCase(); if((ph&&cph===ph)||(emm&&cem===emm)){ c.status='converted'; c.converted_lead_id=id; } } }); ankaSBSave(); return Promise.resolve({ok:true,id,price:pr}); }
+    if(action==='addCold'){ if(!(typeof SESSION!=='undefined'&&SESSION&&SESSION.role==='owner')) return Promise.resolve({ok:false,error:'Not authorized (owner only).'}); (p.contacts||[]).forEach(c=>{ if(c.phone||c.email) sb.cold.push({id:'C'+(sb.cold.length+1),first:c.first,last:c.last,state:c.state,phone:c.phone,email:c.email,segment:c.segment,source:'Manual import',status:'cold',converted_lead_id:''}); }); ankaSBSave(); return Promise.resolve({ok:true,added:(p.contacts||[]).length}); }
+  }
+  return Promise.resolve({ok:false,error:'sandbox: unknown action '+action});
+}
+/* Toggle sandbox via ?sandbox=1 (persists) / ?sandbox=0 (clears). */
+(function ankaSandboxInit(){ try{ const q=new URLSearchParams(location.search);
+  if(q.get('sandbox')==='1'||localStorage.getItem('anka_sandbox')==='1'){ ANKA.SANDBOX=true; localStorage.setItem('anka_sandbox','1'); }
+  if(q.get('sandbox')==='0'){ ANKA.SANDBOX=false; localStorage.removeItem('anka_sandbox'); ankaSBReset(); }
+}catch(e){} })();
 
 /* Load TrustedForm (captures the TCPA consent certificate) — live mode only. */
 function ankaLoadTrustedForm(){
@@ -655,30 +723,26 @@ if(typeof window!=='undefined'){ window.addEventListener('DOMContentLoaded', ank
 /* Write a consented survey lead into the Sheet backend (the funnel intake). */
 async function ankaCreateLead(L, cert){
   try{
-    await fetch(ANKA.BACKEND_URL, {
-      method:'post', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action:'createLead',
-        first:L.first, last:L.last, state:L.state, city:L.city||'',
-        phone:L.phone, email:L.email, type:L.type||'shared', category:L.category,
-        score:(L.score&&L.score.score)||'', tier:(L.score&&L.score.tier)||'C',
-        consent_cert: cert||'', source:'Web opt-in survey' })
-    });
+    await ankaPost({ action:'createLead',
+      first:L.first, last:L.last, state:L.state, city:L.city||'',
+      phone:L.phone, email:L.email, type:L.type||'shared', category:L.category,
+      score:(L.score&&L.score.score)||'', tier:(L.score&&L.score.tier)||'C',
+      consent_cert: cert||'', source:'Web opt-in survey' });
   }catch(e){ /* consumer already saw the thank-you screen; don't surface errors */ }
 }
 
 async function ankaCheckout(payload){
   const email = (typeof SESSION!=='undefined' && SESSION && SESSION.email) ? SESSION.email : '';
   if(!email){ alert('Please sign in with your agent email before buying.'); return; }
-  if(!ANKA.BACKEND_URL){ alert('Checkout is not configured yet.'); return; }
+  if(!ankaEnabled()){ alert('Checkout is not configured yet.'); return; }
   try{
-    if(typeof showToast==='function') showToast('<b>Opening secure checkout…</b>',4000);
-    const res = await fetch(ANKA.BACKEND_URL, {
-      method:'post',
-      headers:{'Content-Type':'text/plain;charset=utf-8'}, // 'simple' request → avoids CORS preflight to Apps Script
-      body: JSON.stringify(Object.assign({action:'createCheckout', agentEmail:email}, payload))
-    });
-    const data = await res.json();
-    if(data && data.ok && data.url){ window.location.href = data.url; }
+    if(typeof showToast==='function') showToast(ankaSandbox()?'<b>Processing… (sandbox)</b>':'<b>Opening secure checkout…</b>',3000);
+    const data = await ankaPost(Object.assign({action:'createCheckout', agentEmail:email}, payload));
+    if(data && data.sandbox && data.ok){
+      if(typeof showToast==='function') showToast('<b>Purchased ✅ (sandbox)</b><div class="tmeta">'+(data.delivered||0)+' lead(s) delivered to My Leads.</div>',5000);
+      if(typeof nav==='function') nav('myleads');
+    }
+    else if(data && data.ok && data.url){ window.location.href = data.url; }
     else if(data && data.error==='verify_required'){
       if(typeof showToast==='function') showToast('<b>Verify your license first</b><div class="tmeta">'+(data.message||'')+'</div>',6000);
       if(typeof nav==='function') nav('marketplace'); // the marketplace shows the verification form
@@ -701,7 +765,7 @@ async function ankaLoadInventory(){
   const email=(typeof SESSION!=='undefined' && SESSION && SESSION.email)?SESSION.email:'';
   // License gate: unverified buyers see the verification form instead of inventory.
   try{
-    const ar=await fetch(ANKA.BACKEND_URL+'?action=agent&email='+encodeURIComponent(email)).then(r=>r.json());
+    const ar=await ankaGet('agent',{email});
     const ag=ar&&ar.agent;
     if(!ag || ag.verify_status!=='approved'){
       if(bun) bun.innerHTML='';
@@ -710,10 +774,7 @@ async function ankaLoadInventory(){
     }
   }catch(e){ /* if the status check fails, let the server-side gate handle buys */ }
   try{
-    const [li, bd] = await Promise.all([
-      fetch(ANKA.BACKEND_URL+'?action=inventory').then(r=>r.json()),
-      fetch(ANKA.BACKEND_URL+'?action=bundles').then(r=>r.json())
-    ]);
+    const [li, bd] = await Promise.all([ ankaGet('inventory'), ankaGet('bundles') ]);
     if(bun && bd && bd.ok){ bun.innerHTML = ankaBundlesHTML(bd.bundles||[]); }
     const src=document.getElementById('ankaSource');
     if(src && bd && bd.ok){ src.innerHTML = ankaSourceHTML(bd.source_price||35); }
@@ -800,8 +861,7 @@ async function ankaSubmitVerify(){
   const life=g('av_life')?g('av_life').checked:true;
   const errBox=g('ankaVerifyErr');
   try{
-    const res=await fetch(ANKA.BACKEND_URL,{method:'post',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({action:'verifyAgent', email, npn, license_state:state, name, agency, line_life:life, states:state?[state]:[]})}).then(r=>r.json());
+    const res=await ankaPost({action:'verifyAgent', email, npn, license_state:state, name, agency, line_life:life, states:state?[state]:[]});
     if(res&&res.ok&&res.approved){
       if(typeof showToast==='function') showToast('<b>License verified ✅</b><div class="tmeta">You can now buy leads.</div>',5000);
       ankaLoadInventory();
@@ -825,7 +885,7 @@ async function ankaLoadMyLeads(){
   if(!wrap) return;
   if(!email){ wrap.innerHTML=`<div class="alert bad">Sign in with your agent email to see your purchased leads.</div>`; return; }
   try{
-    const r=await fetch(ANKA.BACKEND_URL+'?action=myleads&email='+encodeURIComponent(email)).then(x=>x.json());
+    const r=await ankaGet('myleads',{email});
     const leads=(r&&r.ok&&r.leads)||[];
     if(!leads.length){ wrap.innerHTML=`<div class="empty"><div class="ic"><i class="ph-duotone ph-clipboard-text"></i></div><p>No purchased leads yet. <a onclick="nav('marketplace')">Browse the marketplace →</a></p></div>`; return; }
     window.__ankaMine=leads;
@@ -911,7 +971,7 @@ async function ankaLoadCold(){
   const wrap=document.getElementById('ankaColdWrap'); if(!wrap) return;
   const email=(typeof SESSION!=='undefined'&&SESSION&&SESSION.email)?SESSION.email:'';
   try{
-    const r=await fetch(ANKA.BACKEND_URL+'?action=cold&email='+encodeURIComponent(email)).then(x=>x.json());
+    const r=await ankaGet('cold',{email});
     if(!r.ok){ wrap.innerHTML=`<div class="alert bad">${r.error||'Not authorized.'}</div>`; return; }
     if(r.survey_url) window.__ankaSurveyUrl=r.survey_url;
     window.__ankaCold=r.cold||[];
@@ -938,7 +998,7 @@ async function ankaImportCold(){
   if(!contacts.length){ alert('Paste at least one contact (first,last,state,phone,email,segment).'); return; }
   const email=(typeof SESSION!=='undefined'&&SESSION&&SESSION.email)?SESSION.email:'';
   try{
-    const r=await fetch(ANKA.BACKEND_URL,{method:'post',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'addCold',email,contacts,source:'Manual import'})}).then(x=>x.json());
+    const r=await ankaPost({action:'addCold',email,contacts,source:'Manual import'});
     if(r.ok){ if(typeof showToast==='function') showToast('<b>Added '+r.added+' cold contacts</b>',4000); ankaLoadCold(); }
     else alert('Import error: '+(r.error||'unknown'));
   }catch(err){ alert('Could not import: '+err); }
