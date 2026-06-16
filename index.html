@@ -859,6 +859,100 @@ function ankaExportMyLeads(){
   const a=document.createElement('a'); a.href=url; a.download='anka-my-leads.csv'; a.click(); URL.revokeObjectURL(url);
 }
 
+/* ===== COLD LISTS (owner-only): convert scraped/no-consent contacts into real leads ===== */
+function ankaSurveyUrl(){ return window.__ankaSurveyUrl || ((location.origin&&location.origin.indexOf('http')===0)?location.origin+'/#survey':'https://ankalifeleads.com/#survey'); }
+function ankaEmailTemplate(url){
+  return `Subject: A quick question about life insurance
+
+Hi [First name],
+
+I help families in [State] find affordable life insurance — including final expense, and coverage for veterans and seniors.
+
+If you'd like a free, no-obligation quote from a licensed agent, just fill out this 60-second form and we'll reach out:
+${url}
+
+No cost and no pressure — only if you're interested.
+
+— [Your name], AnkaLife
+[Your business mailing address]
+
+You're receiving this because your contact information was publicly listed. If you'd prefer not to hear from us, reply STOP or use this link to unsubscribe: [unsubscribe link]. We'll remove you right away.`;
+}
+function ankaColdHTML(){
+  const url=ankaSurveyUrl();
+  const qr='https://api.qrserver.com/v1/create-qr-code/?size=170x170&data='+encodeURIComponent(url);
+  return `<div class="page-head"><div><h1>Cold Lists</h1>
+    <p>Scraped / no-consent contacts — <b>never sold, never AI-called.</b> Mail or email them the interest form so they opt in and become real, consented leads.</p></div></div>
+
+  <div class="note" style="background:#fff7e8;border:1px solid #f0d28a;margin-bottom:16px"><b style="color:#8a5a00"><i class="ph-bold ph-warning"></i> How you may contact these</b>
+    <div style="font-size:13px;color:#6b4d12;margin-top:6px">✅ <b>Direct mail</b> &amp; ✅ <b>CAN-SPAM email</b> (to send the form). ✅ <b>Manual dial only after a National DNC scrub.</b> ❌ <b>No texting, no autodialer, no AI calls</b> until they opt in. The AI engine can't see this list.</div></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+    <div class="card feature">
+      <h3><i class="ph-duotone ph-envelope-simple" style="color:var(--teal)"></i> Interest-form email (CAN-SPAM ready)</h3>
+      <p style="font-size:12.5px;color:var(--muted)">Paste into your email tool, replace the [bracketed] bits. Keep the opt-out + mailing address — that's what makes it legal.</p>
+      <textarea id="ankaEmailCopy" style="width:100%;height:210px;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:10px">${ankaEmailTemplate(url)}</textarea>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="ankaCopy('ankaEmailCopy')"><i class="ph ph-copy"></i> Copy email</button>
+    </div>
+    <div class="card feature">
+      <h3><i class="ph-duotone ph-qr-code" style="color:var(--teal)"></i> Postcard QR (direct mail)</h3>
+      <p style="font-size:12.5px;color:var(--muted)">Put this QR on a mailer — it links straight to your interest form.</p>
+      <div style="text-align:center;margin:10px 0"><img src="${qr}" alt="Survey QR" style="border:1px solid var(--line);border-radius:8px"></div>
+      <div class="field"><label>Your interest-form link</label><input id="ankaSurveyLink" value="${url}" readonly></div>
+      <button class="btn btn-outline btn-sm" onclick="ankaCopy('ankaSurveyLink')"><i class="ph ph-copy"></i> Copy link</button>
+    </div>
+  </div>
+
+  <div id="ankaColdWrap"><div class="empty"><div class="ic"><i class="ph-duotone ph-snowflake"></i></div><p>${ankaEnabled()?'Loading your cold list…':'Turn on live mode (connect the backend) to import &amp; track cold lists. The email + QR kit above already works.'}</p></div></div>`;
+}
+function ankaCopy(id){ const el=document.getElementById(id); if(!el) return; try{ el.focus(); el.select&&el.select(); }catch(e){} try{ navigator.clipboard.writeText(el.value); if(typeof showToast==='function') showToast('Copied ✅',1800); }catch(e){ try{document.execCommand('copy');}catch(_){} } }
+async function ankaLoadCold(){
+  if(!ankaEnabled()) return;
+  const wrap=document.getElementById('ankaColdWrap'); if(!wrap) return;
+  const email=(typeof SESSION!=='undefined'&&SESSION&&SESSION.email)?SESSION.email:'';
+  try{
+    const r=await fetch(ANKA.BACKEND_URL+'?action=cold&email='+encodeURIComponent(email)).then(x=>x.json());
+    if(!r.ok){ wrap.innerHTML=`<div class="alert bad">${r.error||'Not authorized.'}</div>`; return; }
+    if(r.survey_url) window.__ankaSurveyUrl=r.survey_url;
+    window.__ankaCold=r.cold||[];
+    const s=r.stats||{total:0,converted:0};
+    const rows=(r.cold||[]).map(c=>`<tr><td style="padding:6px 8px">${(c.first||'')+' '+(c.last||'')}</td><td style="padding:6px 8px">${c.state||''}</td><td style="padding:6px 8px">${c.segment||''}</td><td style="padding:6px 8px">${c.phone||''}</td><td style="padding:6px 8px">${c.email||''}</td><td style="padding:6px 8px"><span class="pill ${c.status==='converted'?'sold':'new'}">${c.status}</span></td></tr>`).join('');
+    wrap.innerHTML=`
+      <div class="stat-row" style="margin-bottom:14px">
+        <div class="stat"><div class="lab">Cold contacts</div><div class="val">${s.total}</div></div>
+        <div class="stat"><div class="lab">Converted to leads</div><div class="val">${s.converted}</div><div class="delta up">${s.total?Math.round(s.converted/s.total*100):0}% opt-in</div></div>
+      </div>
+      <div class="card feature" style="margin-bottom:14px">
+        <h3><i class="ph-duotone ph-upload-simple"></i> Import cold contacts</h3>
+        <p style="font-size:12.5px;color:var(--muted)">Paste rows as <code>first,last,state,phone,email,segment</code> (one per line) — from your Apify scrape or a CSV.</p>
+        <textarea id="ankaColdImport" style="width:100%;height:90px;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:10px" placeholder="John,Smith,TX,(555) 123-4567,john@email.com,Veteran"></textarea>
+        <div style="margin-top:8px"><button class="btn btn-teal btn-sm" onclick="ankaImportCold()"><i class="ph ph-plus"></i> Add to cold list</button>
+        <button class="btn btn-outline btn-sm" onclick="ankaColdExport()"><i class="ph ph-download-simple"></i> Export CSV</button></div>
+      </div>
+      ${rows?`<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;border-bottom:2px solid var(--line)"><th style="padding:6px 8px">Name</th><th style="padding:6px 8px">State</th><th style="padding:6px 8px">Segment</th><th style="padding:6px 8px">Phone</th><th style="padding:6px 8px">Email</th><th style="padding:6px 8px">Status</th></tr></thead><tbody>${rows}</tbody></table></div>`:`<div class="empty"><div class="ic"><i class="ph-duotone ph-snowflake"></i></div><p>No cold contacts yet — import some above.</p></div>`}`;
+  }catch(err){ wrap.innerHTML=`<div class="alert bad">Couldn't load cold list: ${err}</div>`; }
+}
+async function ankaImportCold(){
+  const ta=document.getElementById('ankaColdImport'); if(!ta) return;
+  const contacts=ta.value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ const p=l.split(',').map(x=>x.trim()); return {first:p[0]||'',last:p[1]||'',state:p[2]||'',phone:p[3]||'',email:p[4]||'',segment:p[5]||''}; });
+  if(!contacts.length){ alert('Paste at least one contact (first,last,state,phone,email,segment).'); return; }
+  const email=(typeof SESSION!=='undefined'&&SESSION&&SESSION.email)?SESSION.email:'';
+  try{
+    const r=await fetch(ANKA.BACKEND_URL,{method:'post',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'addCold',email,contacts,source:'Manual import'})}).then(x=>x.json());
+    if(r.ok){ if(typeof showToast==='function') showToast('<b>Added '+r.added+' cold contacts</b>',4000); ankaLoadCold(); }
+    else alert('Import error: '+(r.error||'unknown'));
+  }catch(err){ alert('Could not import: '+err); }
+}
+function ankaColdExport(){
+  const b=window.__ankaCold||[];
+  const cols=["First","Last","State","Phone","Email","Segment","Status"];
+  const esc=v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`;
+  const rows=b.map(c=>[c.first,c.last,c.state,c.phone,c.email,c.segment,c.status].map(esc).join(','));
+  const csv=[cols.join(','),...rows].join("\n");
+  const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='anka-cold-list.csv'; a.click(); URL.revokeObjectURL(url);
+}
+
 /* Detect the post-payment return from Stripe and confirm to the buyer. */
 (function ankaReturnNotice(){
   try{
@@ -881,8 +975,8 @@ function render(route){
   route = route || DB.get('route','home');
   const root=document.getElementById('root');
   // Auth gates
-  if(["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions"].includes(route) && !SESSION){ route="login"; }
-  const isApp=["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions"].includes(route);
+  if(["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions","cold"].includes(route) && !SESSION){ route="login"; }
+  const isApp=["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions","cold"].includes(route);
   if(isApp){ root.innerHTML = topbar(true) + appShell(route); bindApp(route); }
   else { root.innerHTML = topbar(false) + views[route](); bindPublic(route); }
 }
@@ -1152,7 +1246,7 @@ function surveyResult(){
 function appShell(route){
   const u=SESSION, owner=u.role==="owner";
   const items = owner
-    ? [["aicalls","ph-phone-call","AI Sales Engine"],["submissions","ph-database","Lead Intelligence"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["profile","ph-gear","Settings"]]
+    ? [["aicalls","ph-phone-call","AI Sales Engine"],["submissions","ph-database","Lead Intelligence"],["cold","ph-snowflake","Cold Lists"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["profile","ph-gear","Settings"]]
     : [["dashboard","ph-house","Dashboard"],["marketplace","ph-tag","Buy Leads"],["packages","ph-package","Packages"],["myleads","ph-list-checks","My Leads"],["wallet","ph-wallet","Wallet"],["profile","ph-user-gear","My Profile"]];
   const st=u.status||"approved";
   const badge = st==="approved"?`<span class="badge ok">● Verified</span>`:st==="denied"?`<span class="badge deny">● Denied</span>`:`<span class="badge pend">● Pending</span>`;
@@ -1166,7 +1260,7 @@ function appShell(route){
   </aside>`;
   return `<div class="app">${side}<main class="main">${appPage(route)}</main></div>`;
 }
-const OWNER_ONLY=["aicalls","campaigns","submissions"];
+const OWNER_ONLY=["aicalls","campaigns","submissions","cold"];
 function appPage(route){
   const u=SESSION;
   if(u.status==="denied" && route!=="profile") return deniedPanel();
@@ -1180,6 +1274,7 @@ function appPage(route){
     case "wallet": return walletPage();
     case "packages": return packagesPage();
     case "submissions": return ownerSubmissions();
+    case "cold": return ankaColdHTML();
     case "profile": return profile();
     default: return u.role==="owner"?aiEngine():marketplace();
   }
@@ -2244,7 +2339,7 @@ function profile(){
 function bindPublic(route){
   if(route==="survey" && SVQ[SV.step]?.type==="number"){ const n=document.getElementById('sv_num'); if(n&&SV.a.age)n.value=SV.a.age; }
 }
-function bindApp(route){ if(route==="aicalls"){ setTimeout(loadVoices,120); } if(route==="marketplace" && ankaEnabled()){ setTimeout(ankaLoadInventory,60); } if(route==="myleads" && ankaEnabled()){ setTimeout(ankaLoadMyLeads,60); } }
+function bindApp(route){ if(route==="aicalls"){ setTimeout(loadVoices,120); } if(route==="marketplace" && ankaEnabled()){ setTimeout(ankaLoadInventory,60); } if(route==="myleads" && ankaEnabled()){ setTimeout(ankaLoadMyLeads,60); } if(route==="cold" && ankaEnabled()){ setTimeout(ankaLoadCold,60); } }
 
 async function doLogin(){
   const email=val('li_email'), pass=val('li_pass');

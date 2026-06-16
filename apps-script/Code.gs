@@ -26,6 +26,7 @@ const TABS = {
   orders:      'Orders',
   bundles:     'Bundles',
   suppression: 'Suppression',
+  cold:        'Cold',
   config:      'Config'
 };
 
@@ -35,6 +36,7 @@ const HEADERS = {
   orders:      ['id','created_at','agent_email','kind','lead_ids','bundle_id','qty','amount','cost','margin','stripe_id','status'],
   bundles:     ['id','name','qty','tier_filter','type_filter','price','price_per_lead','active'],
   suppression: ['phone_or_email','reason','added_at'],
+  cold:        ['id','created_at','first','last','state','phone','email','segment','source','status','converted_lead_id'],
   config:      ['key','value']
 };
 
@@ -134,6 +136,8 @@ function seedConfig_(cfg) {
     ['SHARED_CAP',            '3'],
     ['SUCCESS_URL',           'https://ankalifeleads.com/?paid=1'],
     ['CANCEL_URL',            'https://ankalifeleads.com/?canceled=1'],
+    ['OWNER_EMAIL',           'owner@ankalife.ai'],   // only this account can see/add Cold Lists
+    ['SURVEY_URL',            'https://ankalifeleads.com/#survey'], // the interest form link used in blasts
     // --- Broker (auto-buy) settings ---
     ['SOURCE_PRICE',          '35'],          // what the agent pays to have a fresh lead sourced
     ['MARGIN_TARGET_PERCENT', '40'],          // your target markup (informational; margin is tracked per order)
@@ -194,6 +198,7 @@ function doGet(e) {
     if (action === 'bundles')   return json_({ ok: true, bundles: activeBundles_(), source_price: Number(cfg_('SOURCE_PRICE') || 35) });
     if (action === 'myleads')   return json_({ ok: true, leads: myLeadsFor_(String((e.parameter.email || '')).toLowerCase()) });
     if (action === 'agent')     return json_({ ok: true, agent: agentStatus_(String((e.parameter.email || '')).toLowerCase()) });
+    if (action === 'cold')      return json_(coldList_(String((e.parameter.email || '')).toLowerCase()));
     if (action === 'confirm')   return confirmReturn_(e);   // Stripe sends the buyer here after payment
     return json_({ ok: true, service: 'AnkaLife Lead Engine', ts: String(now_()) });
   } catch (err) {
@@ -236,6 +241,7 @@ function doPost(e) {
     if (body.action === 'createCheckout') return json_(createCheckout_(body));
     if (body.action === 'verifyAgent')    return json_(verifyAgent_(body));
     if (body.action === 'createLead')     return json_(createLead_(body));
+    if (body.action === 'addCold')        return json_(addCold_(body));
     return json_({ ok: false, error: 'Unknown action' });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
@@ -325,6 +331,7 @@ function createLead_(b) {
     consent_cert: String(b.consent_cert || '').trim() || 'PENDING-NO-CERT',
     status: 'new', sold_to: '', times_sold: 0, source: b.source || 'Web opt-in survey'
   });
+  markColdConverted_(b.phone, b.email, id); // cold → consented, if this person was on a cold list
   return { ok: true, id: id, price: price };
 }
 
@@ -519,6 +526,55 @@ function myLeadsFor_(email) {
     phone: l.phone, email: l.email, type: l.type, category: l.category,
     score: l.score, tier: l.tier, price: l.price, status: l.status, bought_at: boughtAt[l.id]
   }));
+}
+
+/* ===================== COLD LISTS (owner-only) ===================== *
+ * Scraped / no-consent contacts. NEVER sold, NEVER called by the AI engine.
+ * Used only to mail/email the interest form so people can opt in and BECOME real
+ * leads. Access is restricted to the OWNER_EMAIL account. */
+function isOwner_(email) { return email && email === String(cfg_('OWNER_EMAIL') || '').toLowerCase(); }
+
+function coldList_(email) {
+  if (!isOwner_(email)) return { ok: false, error: 'Not authorized.' };
+  const rows = objects_('cold').filter(c => c.id).map(c => ({
+    id: c.id, first: c.first, last: c.last, state: c.state, phone: c.phone, email: c.email,
+    segment: c.segment, source: c.source, status: c.status, converted_lead_id: c.converted_lead_id
+  }));
+  const converted = rows.filter(r => String(r.status) === 'converted').length;
+  return { ok: true, cold: rows, stats: { total: rows.length, converted: converted },
+           survey_url: cfg_('SURVEY_URL') || 'https://ankalifeleads.com/#survey' };
+}
+
+function addCold_(body) {
+  const email = String(body.email || '').toLowerCase();
+  if (!isOwner_(email)) return { ok: false, error: 'Not authorized.' };
+  const contacts = Array.isArray(body.contacts) ? body.contacts : [];
+  if (!contacts.length) return { ok: false, error: 'No contacts provided.' };
+  const source = body.source || 'Imported';
+  let added = 0;
+  contacts.forEach(c => {
+    if (!c.phone && !c.email) return;
+    appendRow_(TABS.cold, { id: 'C' + Utilities.getUuid().slice(0, 8), created_at: now_(),
+      first: c.first || '', last: c.last || '', state: c.state || '', phone: c.phone || '', email: c.email || '',
+      segment: c.segment || '', source: source, status: 'cold', converted_lead_id: '' });
+    added++;
+  });
+  return { ok: true, added: added };
+}
+
+/* When a survey lead comes in, mark any matching cold contact as converted (cold → consented). */
+function markColdConverted_(phone, email, leadId) {
+  const sh = SHEET.getSheetByName(TABS.cold);
+  const ph = String(phone || '').replace(/\D/g, ''), em = String(email || '').toLowerCase();
+  if (!ph && !em) return;
+  objects_('cold').forEach(c => {
+    if (String(c.status) === 'converted') return;
+    const cph = String(c.phone || '').replace(/\D/g, ''), cem = String(c.email || '').toLowerCase();
+    if ((ph && cph && ph === cph) || (em && cem && em === cem)) {
+      setCell_(sh, c._row, HEADERS.cold, 'status', 'converted');
+      setCell_(sh, c._row, HEADERS.cold, 'converted_lead_id', leadId);
+    }
+  });
 }
 function matchingLeads_(b) {
   if (!b) return [];
