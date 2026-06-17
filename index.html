@@ -702,6 +702,7 @@ function ankaSandboxApi(method, action, p){
     if(action==='createCheckout'){ return Promise.resolve(ankaSBFulfill(sb,p)); }
     if(action==='createLead'){ const t=String(p.tier||'C'),ty=p.type==='exclusive'?'exclusive':'shared'; const pr=(ty==='shared'?{A:20,B:15,C:11,D:8}:{A:33,B:25,C:18,D:12})[t]||11; const id='L'+Date.now(); sb.leads.unshift({id,first:p.first,last:p.last,state:p.state,city:p.city||'',phone:p.phone,email:p.email,type:ty,category:p.category||'Term Life',score:sc[t]||60,tier:t,price:pr,consent_cert:p.consent_cert||'PENDING-NO-CERT',status:'new',sold_to:'',times_sold:0}); const ph=String(p.phone||'').replace(/\D/g,''),emm=String(p.email||'').toLowerCase(); sb.cold.forEach(c=>{ if(c.status!=='converted'){ const cph=String(c.phone||'').replace(/\D/g,''),cem=String(c.email||'').toLowerCase(); if((ph&&cph===ph)||(emm&&cem===emm)){ c.status='converted'; c.converted_lead_id=id; } } }); ankaSBSave(); return Promise.resolve({ok:true,id,price:pr}); }
     if(action==='addCold'){ if(!(typeof SESSION!=='undefined'&&SESSION&&SESSION.role==='owner')) return Promise.resolve({ok:false,error:'Not authorized (owner only).'}); (p.contacts||[]).forEach(c=>{ if(c.phone||c.email) sb.cold.push({id:'C'+(sb.cold.length+1),first:c.first,last:c.last,state:c.state,phone:c.phone,email:c.email,segment:c.segment,source:'Manual import',status:'cold',converted_lead_id:''}); }); ankaSBSave(); return Promise.resolve({ok:true,added:(p.contacts||[]).length}); }
+    if(action==='addInventory'){ if(!(typeof SESSION!=='undefined'&&SESSION&&SESSION.role==='owner')) return Promise.resolve({ok:false,error:'Not authorized (owner only).'}); let added=0,sellable=0; (p.leads||[]).forEach(l=>{ if(!l.phone&&!l.email)return; const tier=String(l.tier||'C').toUpperCase(); const type=l.type==='exclusive'?'exclusive':'shared'; const price=(type==='shared'?{A:20,B:15,C:11,D:8}:{A:33,B:25,C:18,D:12})[tier]||11; const cert=String(l.consent_cert||'').trim()||'PENDING-NO-CERT'; sb.leads.unshift({id:'L'+Date.now()+Math.floor(Math.random()*1000),first:l.first||'',last:l.last||'',state:l.state||'',city:'',phone:l.phone||'',email:l.email||'',type,category:l.category||'Term Life',score:sc[tier]||60,tier,price,consent_cert:cert,status:'new',sold_to:'',times_sold:0}); added++; if(cert.toUpperCase().indexOf('PENDING')!==0)sellable++; }); ankaSBSave(); return Promise.resolve({ok:true,added,sellable}); }
   }
   return Promise.resolve({ok:false,error:'sandbox: unknown action '+action});
 }
@@ -1013,6 +1014,33 @@ function ankaColdExport(){
   const a=document.createElement('a'); a.href=url; a.download='anka-cold-list.csv'; a.click(); URL.revokeObjectURL(url);
 }
 
+/* ===== IMPORT INVENTORY (owner-only): bulk-bought leads -> sellable marketplace inventory ===== */
+function ankaImportInventoryHTML(){
+  return `<div class="page-head"><div><h1>Import Inventory</h1>
+    <p>Bought a batch of discounted leads? Paste them here — they become sellable inventory on your marketplace instantly, priced by tier.</p></div></div>
+  <div class="note" style="background:#fff7e8;border:1px solid #f0d28a;margin-bottom:16px"><b style="color:#8a5a00"><i class="ph-bold ph-warning"></i> Before you resell purchased leads</b>
+    <div style="font-size:13px;color:#6b4d12;margin-top:6px">✅ Confirm the vendor gives you <b>written resale rights</b>. ✅ Each lead needs a <b>consent certificate</b> (TrustedForm/Jornaya URL) in the last column. <b>Leads with no cert import but stay UNSELLABLE</b> until you have proof — that's your TCPA protection.</div></div>
+  <div class="card feature" style="max-width:780px">
+    <h3><i class="ph-duotone ph-stack" style="color:var(--teal)"></i> Paste your purchased leads</h3>
+    <p style="font-size:12.5px;color:var(--muted)">One lead per line, comma-separated:<br><code>first,last,state,phone,email,category,type,tier,consent_cert</code><br>· <b>type</b> = <code>shared</code> or <code>exclusive</code> · <b>tier</b> = A / B / C / D · <b>category</b> e.g. Final Expense, Term Life</p>
+    <textarea id="ankaInvImport" style="width:100%;height:170px;font-size:12.5px;border:1px solid var(--line);border-radius:8px;padding:10px" placeholder="John,Smith,TX,(555) 123-4567,john@email.com,Final Expense,shared,B,https://cert.trustedform.com/abc123"></textarea>
+    <button class="btn btn-teal" style="margin-top:8px" onclick="ankaImportInventory()"><i class="ph ph-plus"></i> Add to marketplace inventory</button>
+    <div id="ankaInvResult" style="margin-top:10px"></div>
+  </div>`;
+}
+async function ankaImportInventory(){
+  const ta=document.getElementById('ankaInvImport'); if(!ta) return;
+  const leads=ta.value.split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ const p=l.split(',').map(x=>x.trim()); return {first:p[0]||'',last:p[1]||'',state:p[2]||'',phone:p[3]||'',email:p[4]||'',category:p[5]||'Term Life',type:p[6]||'shared',tier:p[7]||'C',consent_cert:p[8]||''}; });
+  if(!leads.length){ alert('Paste at least one lead row.'); return; }
+  const email=(typeof SESSION!=='undefined'&&SESSION&&SESSION.email)?SESSION.email:'';
+  const box=document.getElementById('ankaInvResult');
+  try{
+    const r=await ankaPost({action:'addInventory', email, leads});
+    if(r.ok){ const held=r.added-r.sellable; if(box) box.innerHTML=`<div class="alert ok">Imported <b>${r.added}</b> leads — <b>${r.sellable} sellable now</b>${held>0?`, ${held} held (no consent cert)`:''}. <a onclick="nav('marketplace')">View marketplace →</a></div>`; ta.value=''; }
+    else if(box){ box.innerHTML=`<div class="alert bad">${r.error||'Import failed.'}</div>`; }
+  }catch(err){ if(box) box.innerHTML=`<div class="alert bad">Could not import: ${err}</div>`; }
+}
+
 /* Detect the post-payment return from Stripe and confirm to the buyer. */
 (function ankaReturnNotice(){
   try{
@@ -1035,8 +1063,8 @@ function render(route){
   route = route || DB.get('route','home');
   const root=document.getElementById('root');
   // Auth gates
-  if(["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions","cold"].includes(route) && !SESSION){ route="login"; }
-  const isApp=["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions","cold"].includes(route);
+  if(["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions","cold","inventory"].includes(route) && !SESSION){ route="login"; }
+  const isApp=["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions","cold","inventory"].includes(route);
   if(isApp){ root.innerHTML = topbar(true) + appShell(route); bindApp(route); }
   else { root.innerHTML = topbar(false) + views[route](); bindPublic(route); }
 }
@@ -1306,7 +1334,7 @@ function surveyResult(){
 function appShell(route){
   const u=SESSION, owner=u.role==="owner";
   const items = owner
-    ? [["aicalls","ph-phone-call","AI Sales Engine"],["submissions","ph-database","Lead Intelligence"],["cold","ph-snowflake","Cold Lists"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["profile","ph-gear","Settings"]]
+    ? [["aicalls","ph-phone-call","AI Sales Engine"],["submissions","ph-database","Lead Intelligence"],["cold","ph-snowflake","Cold Lists"],["inventory","ph-stack","Import Inventory"],["campaigns","ph-lightning","Campaigns &amp; Follow-up"],["marketplace","ph-tag","Lead Marketplace"],["profile","ph-gear","Settings"]]
     : [["dashboard","ph-house","Dashboard"],["marketplace","ph-tag","Buy Leads"],["packages","ph-package","Packages"],["myleads","ph-list-checks","My Leads"],["wallet","ph-wallet","Wallet"],["profile","ph-user-gear","My Profile"]];
   const st=u.status||"approved";
   const badge = st==="approved"?`<span class="badge ok">● Verified</span>`:st==="denied"?`<span class="badge deny">● Denied</span>`:`<span class="badge pend">● Pending</span>`;
@@ -1320,7 +1348,7 @@ function appShell(route){
   </aside>`;
   return `<div class="app">${side}<main class="main">${appPage(route)}</main></div>`;
 }
-const OWNER_ONLY=["aicalls","campaigns","submissions","cold"];
+const OWNER_ONLY=["aicalls","campaigns","submissions","cold","inventory"];
 function appPage(route){
   const u=SESSION;
   if(u.status==="denied" && route!=="profile") return deniedPanel();
@@ -1335,6 +1363,7 @@ function appPage(route){
     case "packages": return packagesPage();
     case "submissions": return ownerSubmissions();
     case "cold": return ankaColdHTML();
+    case "inventory": return ankaImportInventoryHTML();
     case "profile": return profile();
     default: return u.role==="owner"?aiEngine():marketplace();
   }

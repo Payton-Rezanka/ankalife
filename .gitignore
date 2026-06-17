@@ -30,3 +30,6 @@ npm-debug.log*
 
 # Temp Office lock files
 ~$*.docx
+
+# Scraped data — keep B2B scrape outputs OUT of the public repo
+scrapes/

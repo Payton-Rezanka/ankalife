@@ -242,6 +242,7 @@ function doPost(e) {
     if (body.action === 'verifyAgent')    return json_(verifyAgent_(body));
     if (body.action === 'createLead')     return json_(createLead_(body));
     if (body.action === 'addCold')        return json_(addCold_(body));
+    if (body.action === 'addInventory')   return json_(addInventory_(body));
     return json_({ ok: false, error: 'Unknown action' });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
@@ -333,6 +334,33 @@ function createLead_(b) {
   });
   markColdConverted_(b.phone, b.email, id); // cold → consented, if this person was on a cold list
   return { ok: true, id: id, price: price };
+}
+
+/* ---- Bulk import purchased leads → sellable marketplace inventory (owner only) ---- *
+ * For the aged-lead arbitrage model: buy a batch cheap, drop it in, resell at markup.
+ * Price is computed server-side from tier+type. A lead with no consent cert is imported
+ * but flagged PENDING-NO-CERT and stays UNSELLABLE until you have proof (TCPA). */
+function addInventory_(body) {
+  const email = String(body.email || '').toLowerCase();
+  if (!isOwner_(email)) return { ok: false, error: 'Not authorized (owner only).' };
+  const leads = Array.isArray(body.leads) ? body.leads : [];
+  if (!leads.length) return { ok: false, error: 'No leads provided.' };
+  let added = 0, sellable = 0;
+  leads.forEach(l => {
+    if (!l.phone && !l.email) return;
+    const tier = String(l.tier || 'C').toUpperCase();
+    const type = (String(l.type || 'shared') === 'exclusive') ? 'exclusive' : 'shared';
+    const price = (type === 'shared' ? SHARED_PRICE : EXCL_PRICE)[tier] || EXCL_PRICE.C;
+    const cert = String(l.consent_cert || '').trim() || 'PENDING-NO-CERT';
+    appendRow_(TABS.leads, { id: 'L' + Utilities.getUuid().slice(0, 8), created_at: now_(),
+      first: l.first || '', last: l.last || '', state: l.state || '', city: l.city || '',
+      phone: l.phone || '', email: l.email || '', type: type, category: l.category || 'Term Life',
+      score: tierScore_(tier), tier: tier, price: price, consent_cert: cert,
+      status: 'new', sold_to: '', times_sold: 0, source: l.source || 'Bulk purchase' });
+    added++;
+    if (cert.toUpperCase().indexOf('PENDING') !== 0) sellable++;
+  });
+  return { ok: true, added: added, sellable: sellable };
 }
 
 /* ===================== BROKER: auto-buy from a lead vendor ===================== *
