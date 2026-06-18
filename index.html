@@ -337,16 +337,24 @@ footer.ft a{color:#cfe0e6}
 /* ---------- Persistence ---------- */
 const DB = {
   get(k,f){ try{return JSON.parse(localStorage.getItem('anka_'+k))??f}catch(e){return f} },
-  set(k,v){ localStorage.setItem('anka_'+k, JSON.stringify(v)) }
+  set(k,v){ try{ localStorage.setItem('anka_'+k, JSON.stringify(v)); }catch(e){ console.warn('localStorage write failed (quota?)', e); } }
 };
+/* Escape user/cloud-sourced text before it touches innerHTML — XSS guard. */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 let SESSION = DB.get('session', null);
 
 /* ============================================================
    SUPABASE BACKEND
    ============================================================ */
-const SB_URL = "https://jeevabvrjiqrkiypznzz.supabase.co";
-const SB_KEY = "sb_publishable_VW2LFgfYfzHnygd7_fxVbw_bTM9fQoV";
-const sb = (window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+/* LEGACY cloud — DISABLED for the public build (security audit 2026-06).
+   The default site is now offline-only (localStorage) / Sheets-backend driven.
+   Do NOT re-enable until: (1) the exposed key below is ROTATED in Supabase, and
+   (2) Row-Level Security is confirmed to block anonymous read/write on `leads`.
+   To re-enable after that, set USE_SUPABASE = true and paste the fresh key. */
+const USE_SUPABASE = false;
+const SB_URL = "";   // rotated/blanked — paste a fresh project URL only when re-enabling
+const SB_KEY = "";   // rotated/blanked — paste a fresh publishable key only when re-enabling
+const sb = (USE_SUPABASE && window.supabase && SB_URL) ? window.supabase.createClient(SB_URL, SB_KEY) : null;
 let CLOUD_LEADS = [];   // masked leads pulled from the cloud (shared across all devices)
 
 /* Insert a freshly-submitted survey lead into the shared cloud database */
@@ -1092,6 +1100,32 @@ function scrollToId(id){const e=document.getElementById(id);if(e)e.scrollIntoVie
    PUBLIC VIEWS
    ============================================================ */
 const views={};
+/* ---------- Legal pages (reachable as routes AND in a modal from the consent box) ----------
+   Plain-English starting templates — have a licensed insurance/privacy attorney review for your states. */
+views.privacy=()=>`<div class="container" style="max-width:760px;padding:28px 0"><div class="form-card" style="text-align:left">
+  <h1 style="font-size:24px">Privacy Policy</h1>
+  <p style="color:var(--muted);font-size:12.5px">AnkaLife · ankalifeleads.com · Last updated 2026.</p>
+  <p><b>What we collect.</b> When you complete our survey we collect the contact and profile details you provide (name, phone, email, state/ZIP, and your survey answers) and a record of your consent.</p>
+  <p><b>Why.</b> To match you with licensed life-insurance agents who can provide quotes and information you requested.</p>
+  <p><b>How we share it.</b> We share your information with <b>licensed insurance agents and agencies</b> so they can contact you about coverage. We do <b>not</b> sell your information to unverified parties.</p>
+  <p><b>Your consent.</b> By submitting the survey you give prior express written consent to be contacted (including by phone, autodialer, AI/prerecorded voice, SMS, and email) about life insurance. You can opt out anytime by replying STOP or emailing us — we honor opt-outs promptly.</p>
+  <p><b>Your rights (CCPA/CPRA & state laws).</b> You may request access to, correction of, or deletion of your information, and you may tell us <b>not to sell or share</b> it. Email <a href="mailto:privacy@ankalifeleads.com">privacy@ankalifeleads.com</a>.</p>
+  <p><b>Security.</b> We use reasonable safeguards to protect your data. No method is 100% secure.</p>
+  <p><b>Contact.</b> <a href="mailto:privacy@ankalifeleads.com">privacy@ankalifeleads.com</a>.</p>
+  <p style="color:var(--muted);font-size:12px">This is a starting template, not legal advice — have an attorney finalize it for your jurisdiction.</p>
+  <button class="btn btn-outline btn-sm" onclick="nav('home')">← Back to home</button></div></div>`;
+views.terms=()=>`<div class="container" style="max-width:760px;padding:28px 0"><div class="form-card" style="text-align:left">
+  <h1 style="font-size:24px">Terms of Service</h1>
+  <p style="color:var(--muted);font-size:12.5px">AnkaLife · ankalifeleads.com · Last updated 2026.</p>
+  <p><b>What AnkaLife is.</b> A marketplace that connects consumers requesting life-insurance information with licensed agents, and sells consumer leads to licensed agents/agencies. AnkaLife does not sell or bind insurance policies; a licensed producer does that.</p>
+  <p><b>No guarantee.</b> Completing the survey is not an application and not a quote. Coverage, approval, and pricing are determined only through a licensed agent and the carrier's application.</p>
+  <p><b>For agents.</b> Buyers must be licensed and are responsible for their own compliance — including DNC scrubbing, maintaining active licensure, and lawful contact of leads.</p>
+  <p><b>Acceptable use.</b> Don't misuse the platform, scrape it, or use leads unlawfully.</p>
+  <p><b>Disclaimers & liability.</b> The service is provided "as is." To the extent permitted by law, AnkaLife is not liable for indirect or consequential damages.</p>
+  <p><b>Contact.</b> <a href="mailto:support@ankalifeleads.com">support@ankalifeleads.com</a>.</p>
+  <p style="color:var(--muted);font-size:12px">This is a starting template, not legal advice — have an attorney finalize it for your jurisdiction.</p>
+  <button class="btn btn-outline btn-sm" onclick="nav('home')">← Back to home</button></div></div>`;
+function showPolicy(which){ modal(which==='terms'?'Terms of Service':'Privacy Policy', which==='terms'?views.terms():views.privacy()); }
 
 views.home=()=>`
 <section class="hero"><div class="hero-inner">
@@ -1318,7 +1352,7 @@ function surveyResult(){
       </div>
       <label style="display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:var(--muted);background:var(--cream);border:1px solid var(--line);border-radius:10px;padding:12px;margin:6px 0 14px">
         <input type="checkbox" id="c_consent" style="margin-top:3px;flex-shrink:0">
-        <span>By checking this box and clicking submit, I give my prior <b>express written consent</b> to be contacted by AnkaLife and its licensed agents at the phone number and email above — including by autodialer, prerecorded/AI voice, SMS, and email — about life insurance, even if my number is on a Do-Not-Call list. Consent isn't a condition of purchase; I can opt out anytime by replying STOP. I agree to the Privacy Policy & Terms.</span>
+        <span>By checking this box and clicking submit, I give my prior <b>express written consent</b> to be contacted by AnkaLife and its licensed agents at the phone number and email above — including by autodialer, prerecorded/AI voice, SMS, and email — about life insurance, even if my number is on a Do-Not-Call list. Consent isn't a condition of purchase; I can opt out anytime by replying STOP. I agree to the <a onclick="event.preventDefault();showPolicy('privacy')" style="text-decoration:underline;cursor:pointer">Privacy Policy</a> &amp; <a onclick="event.preventDefault();showPolicy('terms')" style="text-decoration:underline;cursor:pointer">Terms</a>.</span>
       </label>
       <!-- TrustedForm writes the TCPA consent certificate URL here (proof the consent happened). -->
       <input type="hidden" id="xxTrustedFormCertUrl" name="xxTrustedFormCertUrl">
@@ -1382,7 +1416,7 @@ function deniedPanel(){
   return `<div class="page-head"><div><h1>Account not approved</h1><p>Your automated license verification did not pass.</p></div></div>
   <div class="alert bad"><b>Verification result: Denied</b><br>Checked against ${u.verify?.source||"NIPR Producer Database"}.</div>
   <div class="card"><h3 style="margin-bottom:10px">Reasons</h3><ol style="padding-left:20px;color:var(--muted);line-height:1.8">${r.map(x=>`<li>${x}</li>`).join("")}</ol>
-  <p style="margin-top:14px">Fix the items above in <a onclick="nav('profile')">My Profile</a> and re-run verification, or contact licensing@ankalife.ai.</p></div>`;
+  <p style="margin-top:14px">Fix the items above in <a onclick="nav('profile')">My Profile</a> and re-run verification, or contact <a href="mailto:support@ankalifeleads.com?subject=License%20verification%20help">support@ankalifeleads.com</a>.</p></div>`;
 }
 
 /* ---------- Agent dashboard ---------- */
@@ -2666,7 +2700,7 @@ function doSignup(){
 }
 
 function pickSurvey(k,v){ SV.a[k]=v; render('survey'); setTimeout(()=>{ SV.step++; render('survey'); },180); }
-function svNumNext(){ const n=val('sv_num'); if(!n){alert('Please enter your age.');return;} SV.a.age=+n; SV.step++; render('survey'); }
+function svNumNext(){ const n=val('sv_num'); const age=parseInt(n,10); if(!age||age<18||age>85){alert('Please enter an age between 18 and 85.');return;} SV.a.age=age; SV.step++; render('survey'); }
 function svBack(){ if(SV.step>0){SV.step--; render('survey');} }
 function svToggleTime(t){ SV.a.times=SV.a.times||[]; const i=SV.a.times.indexOf(t); if(i>=0)SV.a.times.splice(i,1); else{ SV.a.times.push(t); SV.a.anytime=false; } render('survey'); }
 function svToggleAnytime(){ SV.a.anytime=!SV.a.anytime; if(SV.a.anytime)SV.a.times=[]; render('survey'); }
@@ -2700,16 +2734,24 @@ function submitSurvey(){
   cloudInsertLead(L);   // <-- legacy Supabase stub
   if(ankaEnabled()){ ankaCreateLead(L, tfCert); }   // <-- write the consented lead into the Sheet backend
   SV={step:0,a:{}};
-  document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
-    <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">Thanks, ${first} — your survey is in!</h1>
-    <p style="color:var(--muted)">Your answers have been matched to ${refAgent?`<b>${refAgent.name}</b>, a`:'a'} licensed, verified life-insurance agent in ${state}. This was a quick survey — <b>not an instant quote</b>. A real agent will personally reach out <b>soon</b> to review your options and build a quote that actually fits you.</p>
+  const live=ankaEnabled();
+  const followup = live
+    ? `<p style="color:var(--muted)">Your answers have been matched to ${refAgent?`<b>${esc(refAgent.name)}</b>, a`:'a'} licensed, verified life-insurance agent in ${esc(state)}. This was a quick survey — <b>not an instant quote</b>. A real agent will personally reach out <b>soon</b> to review your options.</p>
     <div class="alert" style="text-align:left;margin-top:16px;background:#fff7e8;border:1px solid #f0d28a">
       <b style="color:#8a5a00"><i class="ph-bold ph-phone-incoming"></i> Please watch for our call — even from an unknown number</b>
-      <p style="font-size:13px;margin-top:6px;color:#6b4d12">Your agent will call from a regular phone number, so it may show up as <b>"Unknown," "Spam Likely," or a number you don't recognize</b> — that's just how today's spam filters flag new callers, not a real spam call. Please <b>answer calls from unfamiliar numbers</b>, and if you miss it, <b>check your voicemail and texts</b> — we'll leave a message. Saving our number when we reach you helps future calls come through.</p>
+      <p style="font-size:13px;margin-top:6px;color:#6b4d12">Your agent may show up as <b>"Unknown" or "Spam Likely"</b> — that's just how spam filters flag new callers. Please <b>answer calls from unfamiliar numbers</b>, and check voicemail/texts if you miss it.</p>
     </div>
     <div class="alert ok" style="text-align:left;margin-top:12px"><b><i class="ph-bold ph-chat-circle-text"></i> We just texted you a confirmation</b>
-      <p style="font-size:13px;margin-top:6px;font-style:italic;color:#176b48">"${clientConfirmationSMS(first)}"</p></div>
-    <p style="font-size:12px;color:var(--muted);margin-top:10px">A confirmation email is on its way too. You can opt out anytime by replying STOP.</p>
+      <p style="font-size:13px;margin-top:6px;font-style:italic;color:#176b48">"${esc(clientConfirmationSMS(first))}"</p></div>
+    <p style="font-size:12px;color:var(--muted);margin-top:10px">A confirmation email is on its way too. You can opt out anytime by replying STOP.</p>`
+    : `<p style="color:var(--muted)">This was a quick survey for <b>${esc(state)}</b> — <b>not an instant quote</b>.</p>
+    <div class="alert" style="text-align:left;margin-top:16px;background:#fff7e8;border:1px solid #f0d28a">
+      <b style="color:#8a5a00"><i class="ph-bold ph-info"></i> This is a demonstration</b>
+      <p style="font-size:13px;margin-top:6px;color:#6b4d12">No message was sent and no agent will contact you — AnkaLife isn't live yet. Thanks for trying the demo!</p>
+    </div>`;
+  document.getElementById('root').innerHTML=topbar(false)+`<div class="container" style="max-width:540px"><div class="form-card" style="text-align:center">
+    <div style="font-size:48px;color:var(--teal)"><i class="ph-duotone ph-paper-plane-tilt"></i></div><h1 style="font-size:23px;margin:8px 0">Thanks, ${esc(first)} — your survey is in!</h1>
+    ${followup}
     <button class="btn btn-teal" style="margin-top:14px" onclick="nav('home')">Back to home</button></div></div>`;
 }
 /* Drafted automated confirmation the client receives right after submitting.
