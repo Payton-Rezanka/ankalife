@@ -1745,9 +1745,12 @@ function myDeliveries(){ return SESSION&&SESSION.id ? DB.get('deliv_'+SESSION.id
 
 let MFILTER={tier:"",type:"",state:"",max:"",match:false,cat:"",fresh:""};
 function availableLeads(){
+  // Per-user marketplace: hide ONLY the current agent's own purchases. Never hide a lead
+  // because a DIFFERENT account on this device bought it — that used to drain the
+  // marketplace for everyone else on a shared/agency computer. (Live mode enforces real
+  // exclusivity server-side; this is just the local-demo view.)
   const owned=new Set((SESSION.purchased||[]).map(p=>p.id));
   return LEADS.filter(l=>{
-    if(SESSION.role!=="owner" && l.exclusiveSoldTo && l.exclusiveSoldTo!==SESSION.id) return false;
     if(owned.has(l.id) && l.type!=="shared") return false;
     return true;
   });
