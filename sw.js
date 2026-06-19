@@ -1,5 +1,5 @@
 /* AnkaLife service worker — offline support + installability */
-const CACHE = 'ankalife-v1';
+const CACHE = 'ankalife-v2';   // bump this string on every deploy so old caches are purged
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -14,7 +14,7 @@ self.addEventListener('fetch', e => {
   // Network-first for the app shell so updates land immediately; cache fallback offline
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).then(r => { const cp = r.clone(); caches.open(CACHE).then(c => c.put('./index.html', cp)); return r; })
+      fetch(req).then(r => { if (r && r.ok && r.type === 'basic') { const cp = r.clone(); caches.open(CACHE).then(c => c.put('./index.html', cp)); } return r; })
                 .catch(() => caches.match('./index.html'))
     );
     return;

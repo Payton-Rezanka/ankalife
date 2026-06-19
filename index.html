@@ -608,6 +608,10 @@ function saveAccounts(a){DB.set('accounts',a)}
 function findAccount(email){return accounts().find(x=>x.email.toLowerCase()===email.toLowerCase())}
 // Ensure owner exists
 (function ensureOwner(){
+  // SECURITY: the public build ships with NO seeded owner/admin account.
+  // The demo owner login exists only in sandbox mode (?sandbox=1) for testing.
+  const sandbox = /[?&]sandbox=1/.test(location.search) || localStorage.getItem('anka_sandbox')==='1';
+  if(!sandbox) return;
   let a=accounts();
   if(!a.find(x=>x.role==="owner")){
     a.push({id:"owner",role:"owner",name:"Platform Owner",email:"owner@ankalife.ai",password:"owner123",
@@ -724,7 +728,7 @@ function ankaSandboxApi(method, action, p){
 function ankaLoadTrustedForm(){
   if(!ANKA.ENABLED || document.getElementById('anka-tf')) return;
   var tf=document.createElement('script'); tf.id='anka-tf'; tf.type='text/javascript'; tf.async=true;
-  tf.src=(document.location.protocol==='https:'?'https':'http')+'://api.trustedform.com/trustedform.js?field=xxTrustedFormCertUrl&l='+new Date().getTime()+Math.random();
+  tf.src='https://api.trustedform.com/trustedform.js?field=xxTrustedFormCertUrl&l='+new Date().getTime()+Math.random();
   var s=document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(tf,s);
 }
 if(typeof window!=='undefined'){ window.addEventListener('DOMContentLoaded', ankaLoadTrustedForm); }
@@ -1075,6 +1079,31 @@ function render(route){
   const isApp=["dashboard","marketplace","packages","myleads","aicalls","profile","campaigns","wallet","submissions","cold","inventory"].includes(route);
   if(isApp){ root.innerHTML = topbar(true) + appShell(route); bindApp(route); }
   else { root.innerHTML = topbar(false) + views[route](); bindPublic(route); }
+  try{ a11yEnhance(root); }catch(e){}
+}
+/* ---------- Accessibility: make click-only elements keyboard-operable, label inputs, hide decorative icons ---------- */
+function a11yEnhance(root){
+  root=root||document;
+  root.querySelectorAll('[onclick]').forEach(function(el){
+    var t=el.tagName.toLowerCase();
+    if(t==='button') return;
+    if(t==='a' && el.getAttribute('href')) return;
+    if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
+    if(!el.hasAttribute('role')) el.setAttribute('role','button');
+    el.setAttribute('data-key-activatable','1');
+  });
+  root.querySelectorAll('.field').forEach(function(f){
+    var lab=f.querySelector('label'), inp=f.querySelector('input,select,textarea');
+    if(lab&&inp){ if(!inp.id) inp.id='fld_'+Math.random().toString(36).slice(2,9); if(!lab.getAttribute('for')) lab.setAttribute('for',inp.id); }
+  });
+  root.querySelectorAll('i[class*="ph-"]').forEach(function(ic){ if(!ic.hasAttribute('aria-hidden')) ic.setAttribute('aria-hidden','true'); });
+}
+if(typeof document!=='undefined'){
+  document.addEventListener('keydown', function(e){
+    var el=document.activeElement;
+    if((e.key==='Enter'||e.key===' ') && el && el.getAttribute && el.getAttribute('data-key-activatable')==='1'){ e.preventDefault(); el.click(); }
+    if(e.key==='Escape'){ try{ var mr=document.getElementById('modal-root'); if(mr && mr.innerHTML) closeModal(); }catch(_){} }
+  });
 }
 
 /* ---------- Top nav ---------- */
@@ -2713,9 +2742,10 @@ function submitSurvey(){
   const err=document.getElementById('cErr');
   const digits=phone.replace(/\D/g,'');
   if(!first||!last){ err.innerHTML=`<div class="alert bad">Please enter your first and last name.</div>`; return; }
-  if(digits.length<10){ err.innerHTML=`<div class="alert bad">Please enter a valid 10-digit phone number.</div>`; return; }
+  if(!/^[2-9]\d{9}$/.test(digits.slice(-10))){ err.innerHTML=`<div class="alert bad">Please enter a valid US phone number.</div>`; return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ err.innerHTML=`<div class="alert bad">Please enter a valid email address.</div>`; return; }
   if(!state){ err.innerHTML=`<div class="alert bad">Please select your state.</div>`; return; }
+  if(zip && !/^\d{5}$/.test(String(zip).trim())){ err.innerHTML=`<div class="alert bad">Please enter a valid 5-digit ZIP code.</div>`; return; }
   if(!consent){ err.innerHTML=`<div class="alert bad">Please check the consent box — a licensed agent can only contact you with your permission.</div>`; return; }
   const a=SV.a, sc=scoreLead(a);
   const L={ id:"L"+Date.now(), first, last, state, zip,
@@ -3080,8 +3110,9 @@ function rerunVerify(){
 /* ---------- Modal helpers ---------- */
 function modal(title,body){
   document.getElementById('modal-root').innerHTML=`<div class="overlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal"><div class="modal-head"><h2 style="font-size:19px">${title}</h2><button class="x" onclick="closeModal()">×</button></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="${String(title||'Dialog').replace(/<[^>]*>/g,'').replace(/"/g,'')}" tabindex="-1"><div class="modal-head"><h2 style="font-size:19px">${title}</h2><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
     <div class="modal-body">${body}</div></div></div>`;
+  try{ var m=document.querySelector('#modal-root .modal'); if(m) m.focus(); a11yEnhance(document.getElementById('modal-root')); }catch(e){}
 }
 function closeModal(){ document.getElementById('modal-root').innerHTML=""; }
 
