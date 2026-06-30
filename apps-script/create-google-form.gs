@@ -117,11 +117,13 @@ function onFormSubmitNotify(e) {
     });
     const who = (first + ' ' + last).trim();
     const subject = '🔔 New life insurance lead' + (who ? ' — ' + who : '') + (phone ? ' · ' + phone : '');
+    let sheetLink = '';
+    try { sheetLink = 'https://docs.google.com/spreadsheets/d/' + e.source.getDestinationId() + '/edit'; } catch (_) {}
     const body =
       'You have a NEW survey lead — call them soon (speed-to-lead wins):\n\n' +
       lines.join('\n') +
       '\n\nSubmitted: ' + new Date() +
-      '\n\n(Full list lives in your "AnkaLife - Lead Responses" sheet.)';
+      (sheetLink ? '\n\n📋 See ALL the surveys that have been filled out:\n' + sheetLink : '');
     MailApp.sendEmail(NOTIFY_EMAIL, subject, body);
   } catch (err) {
     // Never let a notification error block the lead from being saved.
