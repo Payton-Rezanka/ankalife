@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AnkaLife — Professional Quote Flyer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{ --teal:#0f3b3a; --teal2:#11514e; --gold:#bd8f33; --gold2:#d8b15a; --ink:#1b2a24; --muted:#5d6b63; --cream:#fbf8f1; --line:#e7e0d1; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:'Hanken Grotesk',system-ui,sans-serif; color:var(--ink); background:#d9d6cc; }
+  /* screen-only control bar */
+  .setup{ max-width:8.5in; margin:18px auto; padding:16px 20px; background:#0f3b3a; color:#fff; border-radius:12px; font-size:14px; }
+  .setup b{ color:var(--gold2); }
+  .setup input{ width:100%; margin-top:8px; padding:11px 13px; border:0; border-radius:8px; font-size:14px; }
+  .setup .row{ display:flex; gap:10px; margin-top:8px; }
+  .setup button{ background:var(--gold); color:#1b2a24; border:0; border-radius:8px; padding:11px 18px; font-weight:800; cursor:pointer; white-space:nowrap; }
+  /* the flyer page */
+  .page{ width:8.5in; min-height:11in; margin:18px auto; background:var(--cream); padding:0.7in 0.72in 0.45in; box-shadow:0 8px 34px rgba(0,0,0,.2); display:flex; flex-direction:column; position:relative; }
+  .page::before{ content:""; position:absolute; top:0; left:0; right:0; height:9px; background:linear-gradient(90deg,var(--teal),var(--gold)); }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .mark{ width:46px; height:46px; border-radius:12px; background:var(--teal); color:var(--gold2); font-family:'Fraunces',serif; font-weight:900; font-size:29px; display:flex; align-items:center; justify-content:center; line-height:1; }
+  .word{ font-family:'Fraunces',serif; font-weight:700; font-size:26px; color:var(--teal); letter-spacing:-.3px; }
+  .word .lf{ color:var(--gold); }
+  .brand .tag{ margin-left:auto; text-align:right; font-size:12px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color:var(--teal); line-height:1.5; }
+  .kicker{ margin-top:26px; font-weight:800; letter-spacing:2.5px; text-transform:uppercase; color:var(--gold); font-size:13px; }
+  h1{ font-family:'Fraunces',serif; font-weight:900; font-size:46px; line-height:1.05; color:var(--teal); letter-spacing:-.5px; margin-top:8px; }
+  .lede{ font-size:17.5px; line-height:1.5; color:var(--ink); margin-top:14px; max-width:6.5in; }
+  .lede b{ color:var(--teal); }
+  .types-h{ font-family:'Fraunces',serif; font-weight:700; font-size:18px; color:var(--teal); margin:24px 0 12px; display:flex; align-items:center; gap:10px; }
+  .types-h::after{ content:""; flex:1; height:2px; background:var(--line); }
+  .types{ display:grid; grid-template-columns:1fr 1fr; gap:12px 26px; }
+  .type{ display:flex; gap:11px; align-items:flex-start; }
+  .type .dot{ width:9px; height:9px; min-width:9px; border-radius:50%; background:var(--gold); margin-top:7px; }
+  .type b{ font-size:15px; color:var(--teal); }
+  .type span{ display:block; font-size:13px; color:var(--muted); line-height:1.4; margin-top:1px; }
+  .cta{ display:flex; align-items:center; gap:26px; margin-top:26px; padding:22px 24px; background:#fff; border:2px solid var(--teal); border-radius:16px; }
+  .cta .qrmain{ width:150px; height:150px; display:block; }
+  .cta .big{ font-family:'Fraunces',serif; font-weight:900; font-size:30px; color:var(--teal); line-height:1.08; }
+  .cta .small{ font-size:15px; color:var(--muted); margin-top:8px; }
+  .cta .five{ display:inline-block; margin-top:10px; background:var(--gold); color:#1b2a24; font-weight:800; font-size:13px; padding:5px 12px; border-radius:999px; letter-spacing:.4px; }
+  .trust{ margin-top:16px; text-align:center; font-size:15px; font-weight:700; color:var(--teal); }
+  .legal{ margin-top:auto; padding-top:14px; font-size:10px; color:var(--muted); line-height:1.45; text-align:center; }
+  .tabs{ display:grid; grid-template-columns:repeat(9,1fr); border-top:1px dashed #b9b3a4; margin-top:14px; }
+  .tab{ border-left:1px dashed #b9b3a4; padding:8px 2px; text-align:center; }
+  .tab:first-child{ border-left:none; display:flex; align-items:center; justify-content:center; }
+  .tab .qrtab{ width:50px; height:50px; }
+  .tab .t{ writing-mode:vertical-rl; transform:rotate(180deg); font-size:9px; font-weight:800; color:var(--teal); margin:4px auto 0; letter-spacing:.5px; }
+  .tab .u{ writing-mode:vertical-rl; transform:rotate(180deg); font-size:8.5px; color:var(--gold); font-weight:700; }
+  .scissors{ font-size:12px; color:#b9b3a4; }
+  @media print{
+    body{ background:#fff; }
+    .setup{ display:none; }
+    .page{ margin:0; box-shadow:none; width:100%; min-height:auto; height:100vh; }
+    @page{ size:letter; margin:0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="setup">
+  <b>📋 One step before you print:</b> paste your <b>Google Form link</b> below and click Update — every QR code on the flyer will point to it. (Leave it blank to use your website survey instead.)
+  <div class="row">
+    <input id="formlink" placeholder="https://docs.google.com/forms/d/e/..../viewform">
+    <button onclick="updateQR()">Update QR</button>
+  </div>
+</div>
+
+<div class="page">
+  <div class="brand">
+    <div class="mark">A</div>
+    <div class="word">Anka<span class="lf">Life</span></div>
+    <div class="tag">Free Quote<br>San Diego</div>
+  </div>
+
+  <div class="kicker">Life Insurance Made Simple</div>
+  <h1>Protect the people<br>you love most.</h1>
+  <p class="lede">None of us like to think about it — but if something happened to you, the people who depend on you shouldn't be left with funeral costs, a mortgage, or lost income on top of their grief. <b>Life insurance is how you make sure they're taken care of.</b> It takes about 5 minutes to see your options, and a licensed agent will personally walk you through what fits your family and budget.</p>
+
+  <div class="types-h">Coverage we help San Diego families with</div>
+  <div class="types">
+    <div class="type"><span class="dot"></span><div><b>Final Expense</b><span>Covers funeral &amp; final costs so your family isn't left with the bill.</span></div></div>
+    <div class="type"><span class="dot"></span><div><b>Term Life</b><span>Affordable protection for a set period — great for young families.</span></div></div>
+    <div class="type"><span class="dot"></span><div><b>Whole Life</b><span>Permanent coverage that also builds cash value over time.</span></div></div>
+    <div class="type"><span class="dot"></span><div><b>Mortgage Protection</b><span>Helps your family keep the home if something happens to you.</span></div></div>
+    <div class="type"><span class="dot"></span><div><b>IUL (Cash Value)</b><span>Permanent coverage with tax-advantaged growth potential.</span></div></div>
+    <div class="type"><span class="dot"></span><div><b>Veteran Coverage</b><span>Options for those who served and their families.</span></div></div>
+  </div>
+
+  <div class="cta">
+    <img class="qrmain" src="" alt="Scan to get your free quote">
+    <div>
+      <div class="big">Scan to get your<br>free quote</div>
+      <div class="small">Point your phone camera at the code — it opens right up.</div>
+      <span class="five">⏱ Takes about 5 minutes</span>
+    </div>
+  </div>
+  <div class="trust">Free · No obligation · A licensed agent will personally follow up</div>
+
+  <div class="legal"><b>AnkaLife is not affiliated with or endorsed by the VA or any U.S. government agency.</b> This is a quick request, not an instant quote — coverage and pricing depend on your application and aren't guaranteed in advance. By submitting, you consent to be contacted by AnkaLife and a licensed insurance agent about life insurance; you may opt out anytime. © AnkaLife · ankalifeleads.com</div>
+
+  <div class="tabs">
+    <div class="tab"><span class="scissors">✂</span></div>
+    <script>document.write(Array(8).fill('<div class="tab"><img class="qrtab" src=""><div class="t">FREE QUOTE</div><div class="u">5-min survey</div></div>').join(''))</script>
+  </div>
+</div>
+
+<script>
+  function qrUrl(data,size){ return 'https://api.qrserver.com/v1/create-qr-code/?size='+size+'&margin=0&data='+encodeURIComponent(data); }
+  function updateQR(){
+    var v=(document.getElementById('formlink').value||'').trim();
+    var url = v || 'https://ankalifeleads.com/?goto=survey';
+    document.querySelectorAll('.qrmain').forEach(function(i){ i.src=qrUrl(url,'320x320'); });
+    document.querySelectorAll('.qrtab').forEach(function(i){ i.src=qrUrl(url,'130x130'); });
+  }
+  window.addEventListener('DOMContentLoaded', updateQR);
+</script>
+</body>
+</html>
