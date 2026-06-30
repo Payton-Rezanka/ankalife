@@ -13,7 +13,16 @@
  *   6. Connect Excel to the RESPONSES sheet with the Power Query steps in EXCEL_LEADS_SETUP.md.
  *
  * Re-running makes a NEW form each time — only run it once.
+ *
+ * NOTE: when you Run it, Google will ask permission to (a) build the form, (b) create a
+ * spreadsheet, and (c) SEND YOU EMAIL when a lead comes in — approve all of it. That's how
+ * you get notified.
  */
+
+// 📧 Every new survey response emails this address (with the lead's name, phone & answers).
+//    Change it anytime if you want notifications somewhere else.
+const NOTIFY_EMAIL = 'ptrezankaffl@outlook.com';
+
 function createSurveyForm() {
   const form = FormApp.create('AnkaLife — Free Life Insurance Quote');
 
@@ -76,8 +85,46 @@ function createSurveyForm() {
   const ss = SpreadsheetApp.create('AnkaLife - Lead Responses');
   form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());
 
+  // 🔔 Set up the email notification: fire onFormSubmitNotify() on every submission.
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'onFormSubmitNotify') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('onFormSubmitNotify').forForm(form).onFormSubmit().create();
+
   Logger.log('===== COPY THESE =====');
   Logger.log('PUBLIC form link (put on flyers / QR / social):  ' + form.getPublishedUrl());
   Logger.log('EDIT the form (change questions/branding):       ' + form.getEditUrl());
   Logger.log('RESPONSES sheet (who filled it out):             ' + ss.getUrl());
+  Logger.log('EMAIL NOTIFICATIONS will be sent to:             ' + NOTIFY_EMAIL);
+}
+
+/**
+ * Runs automatically on every form submission and emails you the lead.
+ * (Wired up by createSurveyForm — you don't run this one yourself.)
+ */
+function onFormSubmitNotify(e) {
+  try {
+    const items = e.response.getItemResponses();
+    let lines = [], first = '', last = '', phone = '';
+    items.forEach(function (it) {
+      const q = it.getItem().getTitle();
+      let a = it.getResponse();
+      if (Array.isArray(a)) a = a.join(', ');
+      lines.push('• ' + q + ': ' + a);
+      if (/^first name$/i.test(q)) first = a;
+      if (/^last name$/i.test(q)) last = a;
+      if (/phone/i.test(q)) phone = a;
+    });
+    const who = (first + ' ' + last).trim();
+    const subject = '🔔 New life insurance lead' + (who ? ' — ' + who : '') + (phone ? ' · ' + phone : '');
+    const body =
+      'You have a NEW survey lead — call them soon (speed-to-lead wins):\n\n' +
+      lines.join('\n') +
+      '\n\nSubmitted: ' + new Date() +
+      '\n\n(Full list lives in your "AnkaLife - Lead Responses" sheet.)';
+    MailApp.sendEmail(NOTIFY_EMAIL, subject, body);
+  } catch (err) {
+    // Never let a notification error block the lead from being saved.
+    Logger.log('notify error: ' + err);
+  }
 }
