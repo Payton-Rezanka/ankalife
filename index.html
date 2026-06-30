@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>AnkaLife — Exclusive Life Insurance Leads &amp; Free Quotes</title>
-<meta name="description" content="AnkaLife is a marketplace of scored, consent-verified, exclusive life-insurance leads for licensed agents — final expense, term, mortgage protection, veteran and more. Shopping for coverage? Get free quotes from a licensed agent.">
+<title>AnkaLife — Free Life Insurance Quotes from a Licensed Agent</title>
+<meta name="description" content="Get a free life insurance quote in minutes. A licensed agent helps you find the right coverage for your family — final expense, term, whole life, mortgage protection, and veteran options. Free, no obligation.">
 <!-- Social / link-preview (Open Graph + Twitter) -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AnkaLife">
-<meta property="og:title" content="AnkaLife — Exclusive Life Insurance Leads & Free Quotes">
-<meta property="og:description" content="Scored, consent-verified, exclusive life-insurance leads for agents. Shopping for coverage? Get free quotes from a licensed agent in minutes.">
+<meta property="og:title" content="AnkaLife — Free Life Insurance Quotes from a Licensed Agent">
+<meta property="og:description" content="Protect the people you love. Answer a few quick questions and a licensed agent helps you find the right coverage — free, no obligation.">
 <meta property="og:url" content="https://ankalifeleads.com">
 <meta property="og:image" content="https://ankalifeleads.com/icon-512.png">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="AnkaLife — Life Insurance Leads & Free Quotes">
-<meta name="twitter:description" content="Exclusive, consent-verified life-insurance leads for agents — and free quotes for families.">
+<meta name="twitter:title" content="AnkaLife — Free Life Insurance Quotes">
+<meta name="twitter:description" content="Protect the people you love. Free life insurance quote from a licensed agent — final expense, term, mortgage protection, veterans.">
 <meta name="twitter:image" content="https://ankalifeleads.com/icon-512.png">
 <!-- PWA: installable app on iOS + Android -->
 <link rel="manifest" href="manifest.webmanifest">
@@ -657,6 +657,13 @@ const ANKA = {
 function ankaEnabled(){ return ANKA.SANDBOX || !!(ANKA.ENABLED && ANKA.BACKEND_URL); }
 function ankaSandbox(){ return !!ANKA.SANDBOX; }
 
+/* ===== Consumer quote destination =====
+   Every "Get a Free Quote" button — and every flyer/QR/?goto=survey link — sends people here.
+   Paste your Google Form link below to funnel ALL leads to your Form (→ your Sheet + email alerts).
+   Leave it blank to use the built-in on-site survey instead. */
+const QUOTE_URL = '';
+function goQuote(){ if(QUOTE_URL){ try{ window.location.href = QUOTE_URL; return; }catch(e){} } nav('survey'); }
+
 /* Unified API layer: real backend in live mode, in-browser mock in sandbox mode. */
 async function ankaGet(action, params){
   if(ankaSandbox()) return ankaSandboxApi('GET', action, params||{});
@@ -1111,15 +1118,13 @@ function topbar(app){
   const right = SESSION
     ? `<a class="navlink" onclick="nav('${SESSION.role==='owner'?'aicalls':'dashboard'}')">${SESSION.role==='owner'?'Owner Portal':'My Portal'}</a>
        <button class="btn btn-ghost btn-sm" onclick="logout()">Log out</button>`
-    : `<a class="navlink" onclick="nav('login')">Log in</a>
-       <button class="btn btn-primary btn-sm" onclick="startOnboard()">Agent Sign-up</button>`;
+    : `<button class="btn btn-primary btn-sm" onclick="goQuote()">Get a Free Quote</button>`;
   return `<header class="nav"><div class="nav-inner">
     <div class="logo" onclick="nav('home')"><span class="mark">A</span> <span>Anka<span style="color:var(--gold)">Life</span></span></div>
     <div class="spacer"></div>
     <a class="navlink" onclick="nav('home')">Home</a>
     <a class="navlink" onclick="nav('home');setTimeout(()=>scrollToId('how'),60)">How it works</a>
-    <a class="navlink" onclick="nav('home');setTimeout(()=>scrollToId('pricing'),60)">Pricing</a>
-    <a class="navlink" onclick="nav('survey')">Fill out Survey</a>
+    <a class="navlink" onclick="nav('home');setTimeout(()=>scrollToId('coverage'),60)">Coverage</a>
     ${right}
   </div></header>`;
 }
@@ -1159,90 +1164,77 @@ function showPolicy(which){ modal(which==='terms'?'Terms of Service':'Privacy Po
 views.home=()=>`
 <section class="hero"><div class="hero-inner">
   <div>
-    <h1>Exclusive life insurance leads, <span class="hl">ready to close.</span></h1>
-    <p class="sub">AnkaLife is a marketplace of scored, consent-verified life-insurance leads — final expense, term, mortgage protection, veteran and more. Buy one at a time or in bulk, and work prospects who actually asked to be contacted.</p>
+    <h1>Protect the people <span class="hl">you love most.</span></h1>
+    <p class="sub">Life insurance doesn't have to be confusing or expensive. Answer a few quick questions and a licensed agent will personally help you find the right coverage for your family and your budget — free, and with no obligation.</p>
     <div class="cta-row">
-      <button class="btn btn-primary" onclick="startOnboard()">Join as an Agent →</button>
-      <button class="btn btn-ghost" onclick="nav('survey')">I'm shopping for coverage</button>
+      <button class="btn btn-primary" onclick="goQuote()">Get my free quote →</button>
+      <button class="btn btn-ghost" onclick="scrollToId('how')">See how it works</button>
     </div>
     <div class="trust">
-      <div><b>Fresh + aged</b> leads daily</div>
-      <div><b>A–D</b> purchase-intent scoring</div>
-      <div><b>50</b> states supported</div>
-      <div><b>100%</b> consent-verified</div>
+      <div><b>Licensed</b> agent</div>
+      <div><b>Free</b> · no obligation</div>
+      <div><b>2 min</b> to start</div>
+      <div><b>Real</b> people, real options</div>
     </div>
   </div>
   <div class="hero-card">
-    <h4>● Lead Marketplace — Live</h4>
-    <div class="callrow"><span class="dot"></span><div class="meta"><b>Maria R.</b> · TX · <span style="color:#7fe3b8">Tier A</span><br><small>Final Expense · $20–35k · exclusive</small></div></div>
-    <div class="callrow"><span class="dot"></span><div class="meta"><b>Robert C.</b> · FL · <span style="color:#9fd0e8">Tier B</span><br><small>Mortgage Protection · fresh today</small></div></div>
-    <div class="callrow"><span class="dot" style="background:var(--gold)"></span><div class="meta"><b>James W.</b> · GA · Veteran<br><small>Term · $100–200k · ready now</small></div></div>
-    <div style="margin-top:14px;font-size:12.5px;color:#bcd2d8">Every lead opted in &amp; consent-verified · DNC-aware · scored for intent</div>
+    <h4>● A licensed agent, on your side</h4>
+    <div class="callrow"><span class="dot"></span><div class="meta"><b>Final Expense</b><br><small>Cover funeral &amp; final costs</small></div></div>
+    <div class="callrow"><span class="dot" style="background:#9fd0e8"></span><div class="meta"><b>Term &amp; Whole Life</b><br><small>Protect your family's future</small></div></div>
+    <div class="callrow"><span class="dot" style="background:var(--gold)"></span><div class="meta"><b>Mortgage Protection &amp; Veterans</b><br><small>Coverage for every stage of life</small></div></div>
+    <div style="margin-top:14px;font-size:12.5px;color:#bcd2d8">No pressure. No cost to see your options. You stay in control.</div>
   </div>
 </div></section>
 
 <section class="block" id="how"><div class="container">
-  <div class="section-head"><div class="eyebrow">How it works</div><h2>Buy scored leads, write more policies</h2>
-  <p>A self-serve marketplace of consent-verified life-insurance leads for licensed agents.</p></div>
+  <div class="section-head"><div class="eyebrow">How it works</div><h2>Coverage in three simple steps</h2>
+  <p>No exams to get started and no pushy sales — just a clear path to protecting your family.</p></div>
   <div class="steps">
-    <div class="step"><div class="num">1</div><h4>Get verified</h4><p>Sign up and we check your license automatically against the NIPR Producer Database — instant decision, no waiting.</p></div>
-    <div class="step"><div class="num">2</div><h4>Fund your wallet</h4><p>Add a balance and buy leads instantly — one at a time or in bulk — filtered to your states, categories and budget.</p></div>
-    <div class="step"><div class="num">3</div><h4>Work scored leads</h4><p>Each lead arrives with a 0–100 intent score, full survey detail, and 1–3 best-fit carrier matches.</p></div>
-    <div class="step"><div class="num">4</div><h4>Close &amp; track</h4><p>Call your consent-verified prospects, mark policies placed, and grow your book.</p></div>
+    <div class="step"><div class="num">1</div><h4>Answer a few questions</h4><p>Tell us a little about yourself and who you want to protect. It takes about 2 minutes.</p></div>
+    <div class="step"><div class="num">2</div><h4>A licensed agent reviews it</h4><p>A real, licensed agent looks at your situation and finds the options that actually fit you.</p></div>
+    <div class="step"><div class="num">3</div><h4>Get the right coverage</h4><p>We walk you through your choices, answer every question, and help you apply — at your pace.</p></div>
   </div>
+  <div style="text-align:center;margin-top:26px"><button class="btn btn-teal" onclick="goQuote()">Get my free quote →</button></div>
 </div></section>
 
-<section class="block bg-sand"><div class="container">
-  <div class="section-head"><div class="eyebrow">Built for producers</div><h2>Everything you need to buy &amp; close</h2></div>
+<section class="block bg-sand" id="coverage"><div class="container">
+  <div class="section-head"><div class="eyebrow">Coverage we help with</div><h2>The right kind of protection for your life</h2></div>
   <div class="grid-3">
     ${[
-      ["ph-gauge","Purchase-intent scoring","Every lead gets a transparent A–D score so you spend your time (and money) on the hottest prospects first."],
-      ["ph-shield-check","Automated license checks","Get verified against the NIPR Producer Database automatically — approved or denied with a clear reason. No manual review."],
-      ["ph-tag","Fair, real-market pricing","Every lead is exclusive to you — never shared. Tiered pricing (exclusive &amp; aged) by intent and freshness. Buy and call on your own time."],
-      ["ph-handshake","Carrier matching","1–3 best-fit carriers recommended per lead, from final expense to term to IUL — so you quote faster."],
-      ["ph-funnel","Filter &amp; bulk-buy","Filter by category, freshness, tier, state and price — then buy one lead or a hundred in a single click."],
-      ["ph-seal-check","Consent-verified","Every lead opted in through our survey with documented TCPA consent — real people who asked to hear from an agent."]
+      ["ph-flower-lotus","Final Expense","Covers funeral and final costs so your family isn't left with the bill. Built for adults 50–80."],
+      ["ph-umbrella","Term Life","Affordable protection for a set period — ideal for young families covering a mortgage and income."],
+      ["ph-tree","Whole Life","Permanent coverage that lasts your whole life and builds cash value over time."],
+      ["ph-house-line","Mortgage Protection","Helps your family keep the home if something happens to you."],
+      ["ph-trend-up","IUL (Cash Value)","Permanent coverage with tax-advantaged growth potential."],
+      ["ph-medal","Veteran Coverage","Options for those who served and their families. (Not affiliated with the VA.)"]
     ].map(c=>`<div class="card feature"><div class="ic"><i class="ph-duotone ${c[0]}"></i></div><h3>${c[1]}</h3><p>${c[2]}</p></div>`).join("")}
   </div>
 </div></section>
 
-<section class="block" id="pricing"><div class="container">
-  <div class="section-head"><div class="eyebrow">Lead pricing</div><h2>Fair, transparent lead pricing</h2>
-  <p>Benchmarked to the 2025–26 market (ActiveProspect, EverQuote, SmartFinancial, MADLeadFlow). Every price is built from three factors — see <a href="#pricing-how">how we price</a> below.</p></div>
-  <div class="price-grid">
-    <div class="price-card pop"><div class="tag">EXCLUSIVE TO YOU</div><h3>Exclusive</h3><div class="amt">$12<span>–33</span></div>
-      <ul><li>Real-time, sold to <b>you only</b></li><li>Never shared with other agents</li><li><b>Best for</b> closers</li><li>Full survey + score + carrier match</li></ul>
-      <button class="btn btn-primary" style="width:100%" onclick="startOnboard()">Browse</button></div>
-    <div class="price-card"><h3>Aged</h3><div class="amt">$1<span>–9</span></div>
-      <ul><li>15–120+ days old · still exclusive</li><li>Priced by age: ~30-day bands</li><li><b>Best for</b> dialers &amp; nurture</li><li>120+ days = lowest cost</li></ul>
-      <button class="btn btn-outline" style="width:100%" onclick="startOnboard()">Browse</button></div>
+<section class="block"><div class="container">
+  <div class="section-head"><div class="eyebrow">Why families choose us</div><h2>Honest help from a licensed agent</h2></div>
+  <div class="grid-3">
+    ${[
+      ["ph-user-circle","A real licensed agent","You work directly with a licensed insurance professional — not a call center and not a robot."],
+      ["ph-hand-heart","No pressure, no cost","Getting a quote is free and there's never any obligation. You decide what's right for your family."],
+      ["ph-lock-simple","Your information is protected","We use your details only to help you find coverage. We never sell it to unverified parties."]
+    ].map(c=>`<div class="card feature"><div class="ic"><i class="ph-duotone ${c[0]}"></i></div><h3>${c[1]}</h3><p>${c[2]}</p></div>`).join("")}
   </div>
-
-  <div id="pricing-how" class="card" style="max-width:900px;margin:30px auto 0">
-    <h3 style="font-size:19px;margin-bottom:6px"><i class="ph-duotone ph-calculator" style="color:var(--teal)"></i> How we price every lead</h3>
-    <p style="color:var(--muted);font-size:14.5px;margin-bottom:14px">A lead's price isn't arbitrary. It's calculated from three things, then benchmarked against what real vendors charge so you never overpay:</p>
-    <div class="grid-3" style="gap:16px">
-      <div><b>1 · Lead type</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How warm it is. Every lead is <b>exclusive to the agent who buys it</b> — never shared. A fresh exclusive lead is worth more than an older aged one. Type sets the base price: <b>Aged &lt; Exclusive</b>. Buy a lead, then call it on your own time — there's no live-transfer/inbound system.</p></div>
-      <div><b>2 · Intent tier (A–D)</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">Our 0–100 purchase-intent score. A <b>Tier A</b> lead (ready now, real budget, coverage gap) converts several times better than a Tier D, so it costs more. You're paying for likelihood-to-close, not just contact info.</p></div>
-      <div><b>3 · Freshness</b><p style="color:var(--muted);font-size:13.5px;margin-top:4px">How long ago the survey was filled out. <b>Exclusive = 0–14 days</b> (full price). Aged leads step down in ~30-day bands — 15–45, 46–75, 76–120 — to a cheap <b>120+ day</b> floor, because response rates fall over time.</p></div>
-    </div>
-    <div class="note info" style="margin-top:14px"><b>The formula:</b> <code>price = tier(A–D) × freshness band</code>. Example: a Tier A exclusive lead is <b>$33</b> (vs. $40–50 at most vendors); the same profile aged to 15–45 days is ~$9, down to ~$1–2 once it's 120+ days old. <b>Priced to win:</b> every tier is set <b>just under the market</b> — competitors charge exclusive ~$20–45 and recent aged ~$5–15; we come in below so you keep more margin per policy. Benchmarked to EverQuote, SmartFinancial, InsureLeads &amp; aged-lead vendors.</div>
-  </div>
-  <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:18px">No subscriptions or contracts — fund your wallet and pay only for the leads you choose.</p>
 </div></section>
 
 <section class="block bg-sand"><div class="container" style="max-width:760px;text-align:center">
-  <div class="section-head"><div class="eyebrow">For licensed agents</div><h2>Get verified in minutes — no manual approval</h2>
-  <p>Enter your NPN, resident license and carrier appointments. We check the NIPR Producer Database automatically and either approve you or tell you exactly what's missing.</p></div>
-  <button class="btn btn-teal" onclick="startOnboard()">Start agent sign-up →</button>
+  <div class="section-head"><div class="eyebrow">Ready when you are</div><h2>See your options in about 2 minutes</h2>
+  <p>Answer a few quick questions and a licensed agent will reach out to help — free, and with no obligation.</p></div>
+  <button class="btn btn-teal" onclick="goQuote()">Get my free quote →</button>
 </div></section>
 ${footer()}`;
 function startOnboard(){ OB={step:0,a:{states:[],carriers:[]}}; nav('onboard'); }
 
 function footer(){return `<footer class="ft"><div style="max-width:1000px;margin:0 auto">
   <div class="logo" style="justify-content:center;color:#fff;margin-bottom:10px"><span class="mark">A</span> AnkaLife</div>
-  <p>The marketplace for scored, consent-verified life-insurance leads.</p>
-  <p style="margin-top:10px;font-size:12px;color:#7e98a0">Demo build for evaluation. Every lead is collected with TCPA-compliant prior express written consent. Agents are responsible for DNC scrubbing and maintaining active state licensure.</p>
+  <p>Helping families protect what matters most — with honest help from a licensed insurance agent.</p>
+  <p style="margin-top:10px;font-size:12px;color:#7e98a0">Free quotes provided by a licensed insurance agent. <b>Not affiliated with the VA or any government agency.</b> Completing the survey is a request for information — not an instant quote or a guarantee of coverage; coverage and pricing depend on your application.</p>
+  <p style="margin-top:8px;font-size:12px;color:#7e98a0"><a onclick="nav('privacy')" style="color:#9fd0e8;cursor:pointer">Privacy Policy</a> · <a onclick="nav('terms')" style="color:#9fd0e8;cursor:pointer">Terms</a> · <a onclick="nav('login')" style="color:#7e98a0;cursor:pointer">Agent login</a></p>
 </div></footer>`}
 
 /* ---------- Auth views ---------- */
@@ -3190,6 +3182,8 @@ function pickAll(sel,cls,val){ document.querySelectorAll(sel+' label').forEach(l
 /* ---------- boot ---------- */
 (function captureRef(){
   const p=new URLSearchParams(location.search);
+  // If a Google Form is configured (QUOTE_URL), every quote/flyer/QR link funnels straight to it.
+  if(QUOTE_URL && (p.get('goto')==='survey' || p.get('ref'))){ try{ window.location.replace(QUOTE_URL); return; }catch(e){} }
   const code=p.get('ref');
   if(code){ DB.set('ref',code); DB.set('route','survey'); SV={step:0,a:{}}; }
   if(p.get('goto')==='survey'){ DB.set('route','survey'); SV={step:0,a:{}}; }
